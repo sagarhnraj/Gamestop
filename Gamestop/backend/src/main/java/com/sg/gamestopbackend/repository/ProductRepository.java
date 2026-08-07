@@ -6,4 +6,5 @@ import com.sg.gamestopbackend.entity.Product;
 
 public interface ProductRepository extends JpaRepository<Product, Integer> {
 
+    long countByCategory_CategoryId(Integer categoryId);
 }

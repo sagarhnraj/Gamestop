@@ -5,6 +5,7 @@ public class LoginResponseDto {
     private String token;
     private Integer userId;
     private String username;
+    private String role;
     private String message;
 
     public LoginResponseDto() {
@@ -14,11 +15,13 @@ public class LoginResponseDto {
             String token,
             Integer userId,
             String username,
+            String role,
             String message) {
 
         this.token = token;
         this.userId = userId;
         this.username = username;
+        this.role = role;
         this.message = message;
     }
 
@@ -44,6 +47,14 @@ public class LoginResponseDto {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getRole() {
+        return role;
+    }
+
+    public void setRole(String role) {
+        this.role = role;
     }
 
     public String getMessage() {

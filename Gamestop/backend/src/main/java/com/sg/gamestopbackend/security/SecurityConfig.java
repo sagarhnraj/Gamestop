@@ -77,6 +77,12 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // Admin APIs - strictly protected for ROLE_ADMIN / ADMIN
+                        .requestMatchers("/api/admin", "/api/admin/**").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+                        .requestMatchers("/api/users/register").permitAll()
+                        .requestMatchers("/api/users", "/api/users/**").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+                        .requestMatchers("/api/orders/all", "/api/orders/details/**", "/api/orders/*/status").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+
                         // Public APIs
                         .requestMatchers("/api/auth", "/api/auth/**").permitAll()
                         .requestMatchers("/api/products", "/api/products/**").permitAll()

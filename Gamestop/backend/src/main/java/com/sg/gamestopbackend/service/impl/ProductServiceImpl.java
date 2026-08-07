@@ -62,9 +62,10 @@ public class ProductServiceImpl implements ProductService {
         product.setDescription(productDto.getDescription());
         product.setPrice(productDto.getPrice());
         product.setStock(productDto.getStock());
-        product.setRating(productDto.getRating());
+        product.setRating(productDto.getRating() != null ? productDto.getRating() : 4.8);
+        product.setImage(productDto.getImage());
 
-        if (productDto.getCategory() != null) {
+        if (productDto.getCategory() != null && productDto.getCategory().getCategoryId() != null) {
 
             Category category = categoryRepository
                     .findById(productDto.getCategory().getCategoryId())
@@ -76,6 +77,13 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product savedProduct = productRepository.save(product);
+
+        if (productDto.getImage() != null && !productDto.getImage().trim().isEmpty()) {
+            ProductImage productImage = new ProductImage();
+            productImage.setProduct(savedProduct);
+            productImage.setImageUrl(productDto.getImage());
+            productImageRepository.save(productImage);
+        }
 
         return mapToDto(savedProduct);
     }
@@ -94,9 +102,12 @@ public class ProductServiceImpl implements ProductService {
         product.setDescription(productDto.getDescription());
         product.setPrice(productDto.getPrice());
         product.setStock(productDto.getStock());
-        product.setRating(productDto.getRating());
+        if (productDto.getRating() != null) {
+            product.setRating(productDto.getRating());
+        }
+        product.setImage(productDto.getImage());
 
-        if (productDto.getCategory() != null) {
+        if (productDto.getCategory() != null && productDto.getCategory().getCategoryId() != null) {
 
             Category category = categoryRepository
                     .findById(productDto.getCategory().getCategoryId())
@@ -112,6 +123,20 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product updatedProduct = productRepository.save(product);
+
+        if (productDto.getImage() != null && !productDto.getImage().trim().isEmpty()) {
+            List<ProductImage> existingImages = productImageRepository.findByProduct_ProductId(productId);
+            if (!existingImages.isEmpty()) {
+                ProductImage img = existingImages.get(0);
+                img.setImageUrl(productDto.getImage());
+                productImageRepository.save(img);
+            } else {
+                ProductImage img = new ProductImage();
+                img.setProduct(updatedProduct);
+                img.setImageUrl(productDto.getImage());
+                productImageRepository.save(img);
+            }
+        }
 
         return mapToDto(updatedProduct);
     }
@@ -136,13 +161,16 @@ public class ProductServiceImpl implements ProductService {
         productDto.setDescription(product.getDescription());
         productDto.setPrice(product.getPrice());
         productDto.setStock(product.getStock());
+        productDto.setImage(product.getImage());
 
-        // Get first image from productimages table
-        List<ProductImage> images =
-                productImageRepository.findByProduct_ProductId(product.getProductId());
+        // Get first image from productimages table if product.getImage() is empty
+        if (productDto.getImage() == null || productDto.getImage().trim().isEmpty()) {
+            List<ProductImage> images =
+                    productImageRepository.findByProduct_ProductId(product.getProductId());
 
-        if (!images.isEmpty()) {
-            productDto.setImage(images.get(0).getImageUrl());
+            if (!images.isEmpty()) {
+                productDto.setImage(images.get(0).getImageUrl());
+            }
         }
 
         productDto.setRating(product.getRating());

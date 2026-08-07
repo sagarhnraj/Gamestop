@@ -20,6 +20,12 @@ public class GlobalExceptionHandler {
         return ex.getMessage();
     }
 
+    @ExceptionHandler(RuntimeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public String handleRuntimeException(RuntimeException ex) {
+        return ex.getMessage();
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public String handleIllegalState(IllegalStateException ex) {

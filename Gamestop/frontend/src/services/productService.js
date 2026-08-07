@@ -37,3 +37,44 @@ export async function getProductById(id) {
 
   return await response.json();
 }
+
+export async function createProduct(productData) {
+  const response = await fetch(`${API_BASE_URL}/products`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(productData),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to create product");
+  }
+
+  return await response.json();
+}
+
+export async function updateProduct(productId, productData) {
+  const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(productData),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to update product");
+  }
+
+  return await response.json();
+}
+
+export async function deleteProduct(productId) {
+  const response = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete product");
+  }
+}

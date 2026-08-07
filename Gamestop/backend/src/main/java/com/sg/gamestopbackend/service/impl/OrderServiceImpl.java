@@ -202,6 +202,99 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    @Override
+    public List<com.sg.gamestopbackend.dto.AdminOrderDto> getAllOrdersForAdmin() {
+        return orderRepository.findAll(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(this::mapToAdminDto)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public com.sg.gamestopbackend.dto.AdminOrderDto getOrderDetailsForAdmin(String orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+        return mapToAdminDto(order);
+    }
+
+    @Override
+    @Transactional
+    public com.sg.gamestopbackend.dto.AdminOrderDto updateOrderStatus(String orderId, String newStatus) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+
+        if (newStatus == null || newStatus.trim().isEmpty()) {
+            throw new IllegalArgumentException("Order status cannot be empty.");
+        }
+
+        String normalizedStatus = newStatus.trim().toUpperCase();
+        order.setStatus(normalizedStatus);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        Order updatedOrder = orderRepository.save(order);
+        return mapToAdminDto(updatedOrder);
+    }
+
+    private com.sg.gamestopbackend.dto.AdminOrderDto mapToAdminDto(Order order) {
+        com.sg.gamestopbackend.dto.AdminOrderDto dto = new com.sg.gamestopbackend.dto.AdminOrderDto();
+        dto.setOrderId(order.getOrderId());
+        dto.setTotalAmount(order.getTotalAmount());
+        dto.setStatus(order.getStatus());
+        dto.setRazorpayOrderId(order.getRazorpayOrderId());
+        dto.setRazorpayPaymentId(order.getRazorpayPaymentId());
+        dto.setCreatedAt(order.getCreatedAt());
+        dto.setUpdatedAt(order.getUpdatedAt());
+
+        String statusUpper = (order.getStatus() != null) ? order.getStatus().toUpperCase() : "";
+        if ("SUCCESS".equals(statusUpper) || "CONFIRMED".equals(statusUpper) || "SHIPPED".equals(statusUpper) || "DELIVERED".equals(statusUpper) || order.getRazorpayPaymentId() != null) {
+            dto.setPaymentStatus("PAID");
+        } else if ("FAILED".equals(statusUpper) || "CANCELLED".equals(statusUpper)) {
+            dto.setPaymentStatus("CANCELLED");
+        } else {
+            dto.setPaymentStatus("PENDING");
+        }
+
+        if (order.getRazorpayPaymentId() != null && !order.getRazorpayPaymentId().trim().isEmpty()) {
+            dto.setPaymentMethod("Razorpay Online (UPI/Card)");
+        } else {
+            dto.setPaymentMethod("Online Payment");
+        }
+
+        dto.setShippingAddress("Standard Shipping Address");
+
+        if (order.getUser() != null) {
+            dto.setUserId(order.getUser().getUserId());
+            dto.setCustomerName(order.getUser().getUsername() != null ? order.getUser().getUsername() : "Customer");
+            dto.setCustomerEmail(order.getUser().getEmail());
+        } else {
+            dto.setCustomerName("Guest Customer");
+            dto.setCustomerEmail("N/A");
+        }
+
+        List<com.sg.gamestopbackend.dto.AdminOrderItemDto> itemDtos = new java.util.ArrayList<>();
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                com.sg.gamestopbackend.dto.AdminOrderItemDto itemDto = new com.sg.gamestopbackend.dto.AdminOrderItemDto();
+                itemDto.setOrderItemId(item.getId());
+                itemDto.setQuantity(item.getQuantity());
+                itemDto.setPricePerUnit(item.getPricePerUnit());
+                itemDto.setTotalPrice(item.getTotalPrice());
+
+                if (item.getProduct() != null) {
+                    itemDto.setProductId(item.getProduct().getProductId());
+                    itemDto.setProductName(item.getProduct().getName());
+                    itemDto.setProductImage(item.getProduct().getImage());
+                } else {
+                    itemDto.setProductName(item.getOrderItemsCol() != null ? item.getOrderItemsCol() : "Product");
+                }
+                itemDtos.add(itemDto);
+            }
+        }
+        dto.setItems(itemDtos);
+
+        return dto;
+    }
+
     private String truncate(String name) {
         if (name == null) {
             return "item";

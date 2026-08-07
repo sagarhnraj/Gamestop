@@ -95,3 +95,54 @@ export async function getOrders() {
 
   return await response.json();
 }
+
+export async function getAllOrdersForAdmin() {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/orders/all`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Failed to load orders");
+  }
+
+  return await response.json();
+}
+
+export async function getOrderDetailsForAdmin(orderId) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/orders/details/${orderId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Failed to fetch order details");
+  }
+
+  return await response.json();
+}
+
+export async function updateOrderStatus(orderId, status) {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Failed to update order status");
+  }
+
+  return await response.json();
+}

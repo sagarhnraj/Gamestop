@@ -8,9 +8,11 @@ import {
   FaBoxOpen,
   FaSignOutAlt,
   FaUser,
+  FaHeart,
 } from "react-icons/fa";
 import { useState } from "react";
 import { useCart } from "../../context/CartContext";
+import { useWishlist } from "../../context/WishlistContext";
 
 function Navbar() {
   const navigate = useNavigate();
@@ -21,6 +23,7 @@ function Navbar() {
   const [accountOpen, setAccountOpen] = useState(false);
 
   const { cartItems, clearCart } = useCart();
+  const { wishlistCount } = useWishlist();
 
   const searchQuery = searchParams.get("search") || "";
 
@@ -83,6 +86,18 @@ function Navbar() {
             className="hover:text-red-500 transition"
           >
             Products
+          </Link>
+
+          <Link
+            to="/wishlist"
+            className="hover:text-red-500 transition flex items-center gap-1"
+          >
+            Wishlist
+            {wishlistCount > 0 && (
+              <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+                {wishlistCount}
+              </span>
+            )}
           </Link>
 
         </div>
@@ -176,12 +191,26 @@ function Navbar() {
           )}
 
           <Link
+            to="/wishlist"
+            className="relative text-2xl hover:text-red-500 transition text-gray-300"
+            title="Wishlist"
+          >
+            <FaHeart />
+            {wishlistCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                {wishlistCount}
+              </span>
+            )}
+          </Link>
+
+          <Link
             to="/cart"
-            className="relative text-2xl hover:text-red-500 transition"
+            className="relative text-2xl hover:text-red-500 transition text-gray-300"
+            title="Shopping Cart"
           >
             <FaShoppingCart />
 
-            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
 
               {cartCount}
 
@@ -210,6 +239,10 @@ function Navbar() {
 
             <Link to="/products" onClick={() => setMenuOpen(false)}>
               Products
+            </Link>
+
+            <Link to="/wishlist" onClick={() => setMenuOpen(false)}>
+              Wishlist ({wishlistCount})
             </Link>
 
             {isLoggedIn ? (

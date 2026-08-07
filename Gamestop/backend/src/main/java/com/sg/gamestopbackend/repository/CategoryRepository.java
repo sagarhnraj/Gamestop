@@ -6,4 +6,7 @@ import com.sg.gamestopbackend.entity.Category;
 
 public interface CategoryRepository extends JpaRepository<Category, Integer> {
 
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndCategoryIdNot(String name, Integer categoryId);
 }

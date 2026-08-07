@@ -6,9 +6,11 @@ import org.springframework.stereotype.Service;
 
 import com.sg.gamestopbackend.entity.CartItem;
 import com.sg.gamestopbackend.entity.Product;
+import com.sg.gamestopbackend.entity.ProductImage;
 import com.sg.gamestopbackend.entity.User;
 import com.sg.gamestopbackend.exception.ResourceNotFoundException;
 import com.sg.gamestopbackend.repository.CartItemRepository;
+import com.sg.gamestopbackend.repository.ProductImageRepository;
 import com.sg.gamestopbackend.repository.ProductRepository;
 import com.sg.gamestopbackend.repository.UserRepository;
 import com.sg.gamestopbackend.service.CartService;
@@ -19,20 +21,27 @@ public class CartServiceImpl implements CartService {
     private final CartItemRepository cartItemRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
+    private final ProductImageRepository productImageRepository;
 
     public CartServiceImpl(
             CartItemRepository cartItemRepository,
             UserRepository userRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            ProductImageRepository productImageRepository) {
 
         this.cartItemRepository = cartItemRepository;
         this.userRepository = userRepository;
         this.productRepository = productRepository;
+        this.productImageRepository = productImageRepository;
     }
 
     @Override
     public List<CartItem> getCartItems(Integer userId) {
-        return cartItemRepository.findByUser_UserId(userId);
+        List<CartItem> items = cartItemRepository.findByUser_UserId(userId);
+        for (CartItem item : items) {
+            ensureProductImage(item.getProduct());
+        }
+        return items;
     }
 
     @Override
@@ -48,7 +57,9 @@ public class CartServiceImpl implements CartService {
 
             existing.setQuantity(existing.getQuantity() + 1);
 
-            return cartItemRepository.save(existing);
+            CartItem saved = cartItemRepository.save(existing);
+            ensureProductImage(saved.getProduct());
+            return saved;
         }
 
         User user = userRepository.findById(userId)
@@ -65,7 +76,9 @@ public class CartServiceImpl implements CartService {
         cartItem.setProduct(product);
         cartItem.setQuantity(1);
 
-        return cartItemRepository.save(cartItem);
+        CartItem saved = cartItemRepository.save(cartItem);
+        ensureProductImage(saved.getProduct());
+        return saved;
     }
 
     @Override
@@ -83,7 +96,9 @@ public class CartServiceImpl implements CartService {
 
         cartItem.setQuantity(quantity);
 
-        return cartItemRepository.save(cartItem);
+        CartItem saved = cartItemRepository.save(cartItem);
+        ensureProductImage(saved.getProduct());
+        return saved;
     }
 
     @Override
@@ -104,5 +119,15 @@ public class CartServiceImpl implements CartService {
     @Override
     public void clearCart(Integer userId) {
         cartItemRepository.deleteByUser_UserId(userId);
+    }
+
+    private void ensureProductImage(Product product) {
+        if (product == null) return;
+        if (product.getImage() == null || product.getImage().trim().isEmpty()) {
+            List<ProductImage> images = productImageRepository.findByProduct_ProductId(product.getProductId());
+            if (images != null && !images.isEmpty()) {
+                product.setImage(images.get(0).getImageUrl());
+            }
+        }
     }
 }

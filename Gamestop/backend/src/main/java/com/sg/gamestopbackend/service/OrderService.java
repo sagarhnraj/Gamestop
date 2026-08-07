@@ -13,4 +13,10 @@ public interface OrderService {
     Order confirmPayment(PaymentVerificationRequest request);
 
     List<Order> getOrders(Integer userId);
+
+    List<com.sg.gamestopbackend.dto.AdminOrderDto> getAllOrdersForAdmin();
+
+    com.sg.gamestopbackend.dto.AdminOrderDto getOrderDetailsForAdmin(String orderId);
+
+    com.sg.gamestopbackend.dto.AdminOrderDto updateOrderStatus(String orderId, String newStatus);
 }

@@ -9,4 +9,8 @@ import com.sg.gamestopbackend.entity.Order;
 public interface OrderRepository extends JpaRepository<Order, String> {
 
     List<Order> findByUser_UserIdOrderByCreatedAtDesc(Integer userId);
+
+    List<Order> findByUser_UserId(Integer userId);
+
+    void deleteByUser_UserId(Integer userId);
 }
