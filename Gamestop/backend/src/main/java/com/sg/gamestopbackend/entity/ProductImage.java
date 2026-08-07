@@ -15,7 +15,7 @@ public class ProductImage {
     @JoinColumn(name = "product_id")
     private Product product;
 
-    @Column(name = "image_url")
+    @Column(name = "image_url", columnDefinition = "TEXT")
     private String imageUrl;
 
     public ProductImage() {
