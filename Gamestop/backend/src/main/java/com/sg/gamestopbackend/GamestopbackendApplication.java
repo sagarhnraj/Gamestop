@@ -10,6 +10,8 @@ import com.fasterxml.jackson.datatype.hibernate6.Hibernate6Module;
 public class GamestopbackendApplication {
 
     public static void main(String[] args) {
+        // Run diagnostic BEFORE Spring Boot initializes Beans / Datasource connection
+        com.sg.gamestopbackend.config.RenderNetworkDiagnostic.runDiagnostic();
         SpringApplication.run(GamestopbackendApplication.class, args);
     }
 
