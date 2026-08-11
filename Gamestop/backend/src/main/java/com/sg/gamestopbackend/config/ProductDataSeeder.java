@@ -16,9 +16,12 @@ import com.sg.gamestopbackend.entity.ProductImage;
 import com.sg.gamestopbackend.repository.CategoryRepository;
 import com.sg.gamestopbackend.repository.ProductImageRepository;
 import com.sg.gamestopbackend.repository.ProductRepository;
+import java.util.concurrent.CompletableFuture;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 @Component
-public class ProductDataSeeder implements CommandLineRunner {
+public class ProductDataSeeder {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -32,15 +35,19 @@ public class ProductDataSeeder implements CommandLineRunner {
         this.productImageRepository = productImageRepository;
     }
 
-    @Override
-    public void run(String... args) throws Exception {
-        try {
-            seedCategories();
-            seedProductsAndImages();
-            applyProductUpdates();
-        } catch (Exception e) {
-            System.err.println("ProductDataSeeder warning: " + e.getMessage());
-        }
+    @EventListener(ApplicationReadyEvent.class)
+    public void onApplicationReady() {
+        CompletableFuture.runAsync(() -> {
+            try {
+                System.out.println("ProductDataSeeder background execution starting...");
+                seedCategories();
+                seedProductsAndImages();
+                applyProductUpdates();
+                System.out.println("ProductDataSeeder background execution completed!");
+            } catch (Exception e) {
+                System.err.println("ProductDataSeeder warning: " + e.getMessage());
+            }
+        });
     }
 
     private void seedCategories() {
