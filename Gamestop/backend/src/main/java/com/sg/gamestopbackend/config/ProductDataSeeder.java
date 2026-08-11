@@ -1,6 +1,7 @@
 package com.sg.gamestopbackend.config;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,7 @@ public class ProductDataSeeder implements CommandLineRunner {
             }
 
             List<ProductSeedInfo> seeds = getProductSeeds();
+            LocalDateTime now = LocalDateTime.now();
             for (ProductSeedInfo seed : seeds) {
                 Category cat = catMap.getOrDefault(seed.categoryId, defaultCat);
                 Product p = new Product();
@@ -77,6 +79,8 @@ public class ProductDataSeeder implements CommandLineRunner {
                 p.setPrice(BigDecimal.valueOf(seed.price));
                 p.setStock(10);
                 p.setCategory(cat);
+                p.setCreatedAt(now);
+                p.setUpdatedAt(now);
                 Product savedProduct = productRepository.save(p);
 
                 if (seed.imageUrl != null && !seed.imageUrl.isEmpty()) {
