@@ -44,52 +44,68 @@ public class ProductDataSeeder implements CommandLineRunner {
     }
 
     private void seedCategories() {
-        if (categoryRepository.count() == 0) {
-            Category c1 = new Category(null, "Gaming Consoles");
-            Category c2 = new Category(null, "Games");
-            Category c3 = new Category(null, "Gaming Accessories");
-            Category c4 = new Category(null, "Gaming Setup");
-            categoryRepository.saveAll(List.of(c1, c2, c3, c4));
+        String[] catNames = {"Gaming Consoles", "Games", "Gaming Accessories", "Gaming Setup"};
+        for (String catName : catNames) {
+            try {
+                boolean exists = categoryRepository.findAll().stream()
+                        .anyMatch(c -> (c.getName() != null && c.getName().equalsIgnoreCase(catName))
+                                || (c.getCategoryName() != null && c.getCategoryName().equalsIgnoreCase(catName)));
+                if (!exists) {
+                    Category cat = new Category(null, catName);
+                    categoryRepository.save(cat);
+                }
+            } catch (Exception e) {
+                System.err.println("ProductDataSeeder category warning (" + catName + "): " + e.getMessage());
+            }
         }
     }
 
     private void seedProductsAndImages() {
-        if (productRepository.count() == 0) {
-            List<Category> allCategories = categoryRepository.findAll();
-            if (allCategories.isEmpty()) return;
+        try {
+            if (productRepository.count() == 0) {
+                List<Category> allCategories = categoryRepository.findAll();
+                if (allCategories.isEmpty()) return;
 
-            Category defaultCat = allCategories.get(0);
-            Map<Integer, Category> catMap = new HashMap<>();
-            for (Category c : allCategories) {
-                if (c.getName() != null) {
-                    if (c.getName().contains("Consoles")) catMap.put(1, c);
-                    else if (c.getName().contains("Games")) catMap.put(2, c);
-                    else if (c.getName().contains("Accessories")) catMap.put(3, c);
-                    else if (c.getName().contains("Setup")) catMap.put(4, c);
+                Category defaultCat = allCategories.get(0);
+                Map<Integer, Category> catMap = new HashMap<>();
+                for (Category c : allCategories) {
+                    String name = c.getName() != null ? c.getName() : c.getCategoryName();
+                    if (name != null) {
+                        if (name.toLowerCase().contains("console")) catMap.put(1, c);
+                        else if (name.equalsIgnoreCase("games") || name.toLowerCase().contains("game")) catMap.put(2, c);
+                        else if (name.toLowerCase().contains("accessor")) catMap.put(3, c);
+                        else if (name.toLowerCase().contains("setup")) catMap.put(4, c);
+                    }
+                }
+
+                List<ProductSeedInfo> seeds = getProductSeeds();
+                LocalDateTime now = LocalDateTime.now();
+                for (ProductSeedInfo seed : seeds) {
+                    try {
+                        Category cat = catMap.getOrDefault(seed.categoryId, defaultCat);
+                        Product p = new Product();
+                        p.setName(seed.name);
+                        p.setDescription(seed.description);
+                        p.setPrice(BigDecimal.valueOf(seed.price));
+                        p.setStock(10);
+                        p.setCategory(cat);
+                        p.setCreatedAt(now);
+                        p.setUpdatedAt(now);
+                        Product savedProduct = productRepository.save(p);
+
+                        if (seed.imageUrl != null && !seed.imageUrl.isEmpty()) {
+                            ProductImage img = new ProductImage();
+                            img.setProduct(savedProduct);
+                            img.setImageUrl(seed.imageUrl);
+                            productImageRepository.save(img);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("ProductDataSeeder product warning (" + seed.name + "): " + e.getMessage());
+                    }
                 }
             }
-
-            List<ProductSeedInfo> seeds = getProductSeeds();
-            LocalDateTime now = LocalDateTime.now();
-            for (ProductSeedInfo seed : seeds) {
-                Category cat = catMap.getOrDefault(seed.categoryId, defaultCat);
-                Product p = new Product();
-                p.setName(seed.name);
-                p.setDescription(seed.description);
-                p.setPrice(BigDecimal.valueOf(seed.price));
-                p.setStock(10);
-                p.setCategory(cat);
-                p.setCreatedAt(now);
-                p.setUpdatedAt(now);
-                Product savedProduct = productRepository.save(p);
-
-                if (seed.imageUrl != null && !seed.imageUrl.isEmpty()) {
-                    ProductImage img = new ProductImage();
-                    img.setProduct(savedProduct);
-                    img.setImageUrl(seed.imageUrl);
-                    productImageRepository.save(img);
-                }
-            }
+        } catch (Exception e) {
+            System.err.println("ProductDataSeeder seedProductsAndImages warning: " + e.getMessage());
         }
     }
 
