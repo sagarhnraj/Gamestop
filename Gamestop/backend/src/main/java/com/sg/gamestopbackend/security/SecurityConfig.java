@@ -20,12 +20,19 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.sg.gamestopbackend.security.jwt.JwtAuthenticationFilter;
 
+import org.springframework.beans.factory.annotation.Value;
+import java.util.Arrays;
+import java.util.List;
+
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${cors.allowed.origins:http://localhost:5173,http://localhost:3000}")
+    private String allowedOrigins;
 
     public SecurityConfig(
             CustomUserDetailsService customUserDetailsService,
@@ -77,6 +84,9 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
+                        // Health check endpoint (Public, unauthenticated)
+                        .requestMatchers("/health", "/api/health").permitAll()
+
                         // Admin APIs - strictly protected for ROLE_ADMIN / ADMIN
                         .requestMatchers("/api/admin", "/api/admin/**").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
                         .requestMatchers("/api/users/register").permitAll()
@@ -107,7 +117,12 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        configuration.setAllowedOriginPatterns(origins);
 
         configuration.setAllowedMethods(List.of(
                 "GET",
