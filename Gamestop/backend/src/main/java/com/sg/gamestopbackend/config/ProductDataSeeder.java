@@ -20,19 +20,24 @@ import java.util.concurrent.CompletableFuture;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 
+import org.springframework.transaction.support.TransactionTemplate;
+
 @Component
 public class ProductDataSeeder {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
+    private final TransactionTemplate transactionTemplate;
 
     public ProductDataSeeder(ProductRepository productRepository, 
                              CategoryRepository categoryRepository,
-                             ProductImageRepository productImageRepository) {
+                             ProductImageRepository productImageRepository,
+                             TransactionTemplate transactionTemplate) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.productImageRepository = productImageRepository;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -40,12 +45,15 @@ public class ProductDataSeeder {
         CompletableFuture.runAsync(() -> {
             try {
                 System.out.println("ProductDataSeeder background execution starting...");
-                seedCategories();
-                seedProductsAndImages();
-                applyProductUpdates();
-                System.out.println("ProductDataSeeder background execution completed!");
+                transactionTemplate.executeWithoutResult(status -> {
+                    seedCategories();
+                    seedProductsAndImages();
+                    applyProductUpdates();
+                });
+                System.out.println("ProductDataSeeder background execution completed successfully!");
             } catch (Exception e) {
-                System.err.println("ProductDataSeeder warning: " + e.getMessage());
+                System.err.println("ProductDataSeeder error: " + e.getMessage());
+                e.printStackTrace();
             }
         });
     }
