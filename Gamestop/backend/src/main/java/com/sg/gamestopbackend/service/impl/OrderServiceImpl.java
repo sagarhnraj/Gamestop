@@ -48,7 +48,7 @@ public class OrderServiceImpl implements OrderService {
             OrderRepository orderRepository,
             CartItemRepository cartItemRepository,
             UserRepository userRepository,
-            RazorpayClient razorpayClient) {
+            @org.springframework.beans.factory.annotation.Autowired(required = false) RazorpayClient razorpayClient) {
 
         this.orderRepository = orderRepository;
         this.cartItemRepository = cartItemRepository;
@@ -159,9 +159,10 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private String createRazorpayOrder(long amountInPaise, String receipt) {
-
+        if (razorpayClient == null) {
+            return "order_dummy_" + UUID.randomUUID().toString().substring(0, 8);
+        }
         try {
-
             JSONObject options = new JSONObject();
             options.put("amount", amountInPaise);
             options.put("currency", currency);

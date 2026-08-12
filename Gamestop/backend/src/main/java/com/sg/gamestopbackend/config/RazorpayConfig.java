@@ -10,14 +10,21 @@ import com.razorpay.RazorpayException;
 @Configuration
 public class RazorpayConfig {
 
-    @Value("${razorpay.key.id}")
+    @Value("${razorpay.key.id:}")
     private String keyId;
 
-    @Value("${razorpay.key.secret}")
+    @Value("${razorpay.key.secret:}")
     private String keySecret;
 
     @Bean
-    public RazorpayClient razorpayClient() throws RazorpayException {
-        return new RazorpayClient(keyId, keySecret);
+    public RazorpayClient razorpayClient() {
+        try {
+            if (keyId != null && !keyId.trim().isEmpty() && keySecret != null && !keySecret.trim().isEmpty()) {
+                return new RazorpayClient(keyId, keySecret);
+            }
+        } catch (Exception e) {
+            System.err.println("RazorpayClient initialization warning: " + e.getMessage());
+        }
+        return null;
     }
 }
