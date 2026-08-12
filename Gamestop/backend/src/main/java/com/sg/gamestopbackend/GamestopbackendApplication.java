@@ -10,6 +10,26 @@ import com.sg.gamestopbackend.config.RenderNetworkDiagnostic;
 @SpringBootApplication
 public class GamestopbackendApplication {
 
+    static {
+        try {
+            String dbHost = System.getenv("DB_HOST");
+            String dbPort = System.getenv("DB_PORT");
+            if (dbHost != null && !dbHost.trim().isEmpty()) {
+                String cleanHost = dbHost.trim().replaceAll("^\"|\"$", "");
+                if (cleanHost.contains(":")) {
+                    String[] parts = cleanHost.split(":");
+                    cleanHost = parts[0];
+                    if (parts.length > 1 && (dbPort == null || dbPort.trim().isEmpty())) {
+                        System.setProperty("DB_PORT", parts[1]);
+                    }
+                }
+                System.setProperty("DB_HOST", cleanHost);
+            }
+        } catch (Exception e) {
+            System.err.println("Static env sanitizer warning: " + e.getMessage());
+        }
+    }
+
     public static void main(String[] args) {
         try {
             RenderNetworkDiagnostic.runDiagnostic();
