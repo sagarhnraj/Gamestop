@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
 import com.fasterxml.jackson.datatype.hibernate6.Hibernate6Module;
+import com.sg.gamestopbackend.config.RenderNetworkDiagnostic;
 
 @SpringBootApplication
 public class GamestopbackendApplication {
