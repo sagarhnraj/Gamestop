@@ -13,11 +13,11 @@ COPY src/ src/
 RUN ./mvnw clean package -DskipTests
 
 # Stage 2: Production runtime stage
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 # Create a non-root system user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 # Copy compiled JAR artifact from build stage
 COPY --from=build /app/target/*.jar app.jar
