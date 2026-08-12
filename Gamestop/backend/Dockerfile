@@ -16,14 +16,8 @@ RUN ./mvnw clean package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Create a non-root system user for security
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-
 # Copy compiled JAR artifact from build stage
 COPY --from=build /app/target/*.jar app.jar
-RUN chown -R appuser:appgroup /app
-
-USER appuser
 
 # Application listens on port 8080 by default (or dynamic $PORT on Render)
 EXPOSE 8080
