@@ -10,8 +10,14 @@ import com.fasterxml.jackson.datatype.hibernate6.Hibernate6Module;
 public class GamestopbackendApplication {
 
     public static void main(String[] args) {
-        // RenderNetworkDiagnostic disabled so Spring Boot starts instantly without startup delay
-        SpringApplication.run(GamestopbackendApplication.class, args);
+        try {
+            SpringApplication.run(GamestopbackendApplication.class, args);
+        } catch (Throwable t) {
+            System.err.println("=== FATAL STARTUP EXCEPTION ===");
+            t.printStackTrace(System.err);
+            System.err.println("===============================");
+            throw t;
+        }
     }
 
     // Lets Jackson skip Hibernate lazy proxies instead of failing to serialize them.
