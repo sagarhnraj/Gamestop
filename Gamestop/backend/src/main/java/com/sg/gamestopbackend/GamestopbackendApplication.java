@@ -32,7 +32,6 @@ public class GamestopbackendApplication {
 
     public static void main(String[] args) {
         try {
-            RenderNetworkDiagnostic.runDiagnostic();
             SpringApplication.run(GamestopbackendApplication.class, args);
         } catch (Throwable t) {
             System.err.println("=== FATAL STARTUP EXCEPTION ===");
