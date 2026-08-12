@@ -49,24 +49,36 @@ public class DataSourceConfig {
             hostResolvable = false;
         }
 
-        HikariConfig config = new HikariConfig();
         if (hostResolvable) {
-            System.out.println("Configuring MySQL DataSource for host: " + host + ":" + dbPort);
-            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
-            config.setJdbcUrl("jdbc:mysql://" + host + ":" + dbPort + "/" + dbName + "?sslMode=REQUIRED&allowPublicKeyRetrieval=true");
-            config.setUsername(dbUsername);
-            config.setPassword(dbPassword);
-            config.setInitializationFailTimeout(3000);
-        } else {
-            System.out.println("Configuring H2 Fallback DataSource for unresolvable host: " + host);
-            config.setDriverClassName("org.h2.Driver");
-            config.setJdbcUrl("jdbc:h2:mem:gamestopdb;DB_CLOSE_DELAY=-1;MODE=MySQL");
-            config.setUsername("sa");
-            config.setPassword("");
+            try {
+                System.out.println("Configuring MySQL DataSource for host: " + host + ":" + dbPort);
+                HikariConfig mysqlConfig = new HikariConfig();
+                mysqlConfig.setDriverClassName("com.mysql.cj.jdbc.Driver");
+                mysqlConfig.setJdbcUrl("jdbc:mysql://" + host + ":" + dbPort + "/" + dbName + "?useSSL=true&trustServerCertificate=true&allowPublicKeyRetrieval=true&serverTimezone=UTC");
+                mysqlConfig.setUsername(dbUsername);
+                mysqlConfig.setPassword(dbPassword);
+                mysqlConfig.setInitializationFailTimeout(3000);
+                mysqlConfig.setMaximumPoolSize(5);
+                mysqlConfig.setConnectionTimeout(5000);
+                HikariDataSource ds = new HikariDataSource(mysqlConfig);
+                // test a connection
+                try (java.sql.Connection conn = ds.getConnection()) {
+                    System.out.println("Successfully connected to MySQL at " + host);
+                }
+                return ds;
+            } catch (Exception e) {
+                System.err.println("WARN: Failed to initialize MySQL DataSource (" + e.getMessage() + "). Falling back to H2 in-memory database.");
+            }
         }
 
-        config.setMaximumPoolSize(5);
-        config.setConnectionTimeout(5000);
-        return new HikariDataSource(config);
+        System.out.println("Configuring H2 Fallback DataSource for host: " + host);
+        HikariConfig h2Config = new HikariConfig();
+        h2Config.setDriverClassName("org.h2.Driver");
+        h2Config.setJdbcUrl("jdbc:h2:mem:gamestopdb;DB_CLOSE_DELAY=-1;MODE=MySQL");
+        h2Config.setUsername("sa");
+        h2Config.setPassword("");
+        h2Config.setMaximumPoolSize(5);
+        h2Config.setConnectionTimeout(5000);
+        return new HikariDataSource(h2Config);
     }
 }
