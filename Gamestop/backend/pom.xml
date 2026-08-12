@@ -80,6 +80,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 Database (In-memory fallback) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Jackson support for Hibernate lazy proxies -->
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
