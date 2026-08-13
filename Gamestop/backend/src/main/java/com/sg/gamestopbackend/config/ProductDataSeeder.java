@@ -22,21 +22,31 @@ import org.springframework.context.event.EventListener;
 
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.sg.gamestopbackend.entity.User;
+import com.sg.gamestopbackend.repository.UserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
 @Component
 public class ProductDataSeeder {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductImageRepository productImageRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     private final TransactionTemplate transactionTemplate;
 
     public ProductDataSeeder(ProductRepository productRepository, 
                              CategoryRepository categoryRepository,
                              ProductImageRepository productImageRepository,
+                             UserRepository userRepository,
+                             PasswordEncoder passwordEncoder,
                              TransactionTemplate transactionTemplate) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.productImageRepository = productImageRepository;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -46,6 +56,7 @@ public class ProductDataSeeder {
             try {
                 System.out.println("ProductDataSeeder background execution starting...");
                 transactionTemplate.executeWithoutResult(status -> {
+                    seedUsers();
                     seedCategories();
                     seedProductsAndImages();
                     applyProductUpdates();
@@ -56,6 +67,34 @@ public class ProductDataSeeder {
                 e.printStackTrace();
             }
         });
+    }
+
+    private void seedUsers() {
+        // Seed Sagar's User Account
+        if (userRepository.findByEmail("sagarhnagaraj@gmail.com").isEmpty()) {
+            User user = new User();
+            user.setUsername("Sagar Nagaraj");
+            user.setEmail("sagarhnagaraj@gmail.com");
+            user.setPassword(passwordEncoder.encode("Hnsagar@2004"));
+            user.setRole("USER");
+            user.setCreatedAt(LocalDateTime.now());
+            user.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(user);
+            System.out.println("Seeded user: sagarhnagaraj@gmail.com");
+        }
+
+        // Seed Admin Account
+        if (userRepository.findByEmail("admin@gamestop.com").isEmpty()) {
+            User admin = new User();
+            admin.setUsername("GameStop Admin");
+            admin.setEmail("admin@gamestop.com");
+            admin.setPassword(passwordEncoder.encode("Admin123!"));
+            admin.setRole("ADMIN");
+            admin.setCreatedAt(LocalDateTime.now());
+            admin.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(admin);
+            System.out.println("Seeded admin: admin@gamestop.com");
+        }
     }
 
     private void seedCategories() {

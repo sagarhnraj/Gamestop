@@ -40,6 +40,9 @@ public class OtpServiceImpl implements OtpService {
         }
 
         String otp = generateOtp();
+        System.out.println("==========================================");
+        System.out.println("GENERATED OTP FOR " + request.getEmail() + ": " + otp);
+        System.out.println("==========================================");
         sendOtpEmail(request.getEmail(), otp);
 
         OtpDetails details = new OtpDetails(
@@ -51,7 +54,7 @@ public class OtpServiceImpl implements OtpService {
 
         otpCache.put(request.getEmail(), details);
 
-        return new MessageResponseDto("OTP sent to your email.", true);
+        return new MessageResponseDto("OTP generated! Your OTP is: " + otp, true);
     }
 
     @Override
