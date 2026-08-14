@@ -21,9 +21,9 @@ function GoogleLoginButton({ onSuccess }) {
         const data = await googleLogin(response.credential);
 
         if (data.token) {
-          localStorage.setItem("token", data.token);
-          localStorage.setItem("userId", data.userId);
-          localStorage.setItem("username", data.username);
+          localStorage.setItem("token", String(data.token));
+          if (data.userId) localStorage.setItem("userId", String(data.userId));
+          if (data.username) localStorage.setItem("username", String(data.username));
 
           if (onSuccess) {
             onSuccess(data);
