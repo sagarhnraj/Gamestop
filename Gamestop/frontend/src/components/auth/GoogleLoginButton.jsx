@@ -77,35 +77,31 @@ function GoogleLoginButton({ onCredentialResponse, onSuccess }) {
     }
   }, [clientId, navigate, onCredentialResponse, onSuccess]);
 
-  if (!clientId) {
-    return (
-      <div className="w-full">
-        <button
-          type="button"
-          onClick={() =>
-            alert(
-              "Google Sign-In configuration required: Please add VITE_GOOGLE_CLIENT_ID to environment variables."
-            )
-          }
-          className="w-full flex items-center justify-center gap-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-3 px-4 rounded-xl border border-zinc-700 transition"
-        >
-          <FcGoogle className="text-xl" />
-          <span>Continue with Google</span>
-        </button>
-      </div>
-    );
-  }
+  const handleManualClick = () => {
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
+    } else {
+      alert("Google Sign-In is loading, please try again in a moment.");
+    }
+  };
 
   return (
     <div className="w-full space-y-2">
       {error && <div className="text-red-400 text-xs text-center">{error}</div>}
-      {loading ? (
-        <div className="w-full text-center py-3 text-sm text-zinc-400">
-          Authenticating with Google...
-        </div>
-      ) : (
-        <div ref={buttonRef} className="w-full flex justify-center"></div>
-      )}
+      
+      {/* Official Google GIS Button Iframe */}
+      <div ref={buttonRef} className="w-full flex justify-center min-h-[44px]"></div>
+
+      {/* Styled Google Fallback Button */}
+      <button
+        type="button"
+        onClick={handleManualClick}
+        disabled={loading}
+        className="w-full flex items-center justify-center gap-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-3 px-4 rounded-xl border border-zinc-700 transition"
+      >
+        <FcGoogle className="text-xl" />
+        <span>{loading ? "Authenticating with Google..." : "Continue with Google"}</span>
+      </button>
     </div>
   );
 }

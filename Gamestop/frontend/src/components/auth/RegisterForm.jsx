@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Input from "../common/Input";
 import GoogleLoginButton from "./GoogleLoginButton";
 import { googleLogin } from "../../services/authService";
+import { FcGoogle } from "react-icons/fc";
 
 function RegisterForm() {
   const navigate = useNavigate();
@@ -33,12 +34,13 @@ function RegisterForm() {
     setInfoMessage("");
   };
 
-  const handleGoogleCredential = async (idToken) => {
+  const processGoogleCredential = async (idToken) => {
     const newErrors = {};
 
-    if (formData.email.trim() && !/\S+@\S+\.\S+/.test(formData.email.trim())) {
-      newErrors.email = "Enter a valid email address";
-    }
+    if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
+    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
+    if (!formData.email.trim()) newErrors.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) newErrors.email = "Enter a valid email address";
 
     if (formData.password && formData.password.length < 6) {
       newErrors.password = "Minimum 6 characters required";
@@ -100,7 +102,11 @@ function RegisterForm() {
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      setInfoMessage("Registration details validated! Please click 'Continue with Google' below to verify your identity and create your account.");
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.prompt();
+      } else {
+        setInfoMessage("Registration details validated! Please click 'Continue with Google' below to complete account creation.");
+      }
     }
   };
 
@@ -171,21 +177,20 @@ function RegisterForm() {
           disabled={loading}
         />
 
+        {/* Primary Red Action Button explicitly labeled 'Continue with Google' */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-3 rounded-lg font-medium transition text-sm"
+          className="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg text-base cursor-pointer"
         >
-          Validate Details
+          <FcGoogle className="text-2xl bg-white rounded-full p-0.5" />
+          <span>{loading ? "Verifying Google Identity..." : "Continue with Google"}</span>
         </button>
       </form>
 
-      {/* Mandatory Google Sign-In Verification Button */}
+      {/* Render Google Identity Services Component */}
       <div className="space-y-2">
-        <label className="block text-xs font-semibold text-zinc-400 text-center uppercase tracking-wider">
-          Mandatory Verification
-        </label>
-        <GoogleLoginButton onCredentialResponse={handleGoogleCredential} />
+        <GoogleLoginButton onCredentialResponse={processGoogleCredential} />
       </div>
 
       <p className="text-center text-zinc-400 mt-6">
