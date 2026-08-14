@@ -15,7 +15,7 @@ public class ResendEmailService {
     @Value("${resend.api.key:${RESEND_API_KEY:}}")
     private String resendApiKey;
 
-    @Value("${resend.from.email:${MAIL_FROM_EMAIL:onboarding@resend.dev}}")
+    @Value("${resend.from.email:${MAIL_FROM_EMAIL:4gm22cs040@gmit.ac.in}}")
     private String fromEmail;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -31,7 +31,7 @@ public class ResendEmailService {
         apiKey = apiKey.trim();
 
         String envSender = System.getenv("MAIL_FROM_EMAIL");
-        String sender = (envSender != null && !envSender.isBlank()) ? envSender.trim() : ((fromEmail != null && !fromEmail.isBlank()) ? fromEmail.trim() : "onboarding@resend.dev");
+        String sender = (envSender != null && !envSender.isBlank()) ? envSender.trim() : ((fromEmail != null && !fromEmail.isBlank()) ? fromEmail.trim() : "4gm22cs040@gmit.ac.in");
         String subject = "Your GameStop Registration OTP";
         String content = "Hello,\n\nYour OTP for GameStop account registration is: " + otp + "\n\nThis OTP will expire in 5 minutes.\nIf you did not request this, please ignore this email.";
 
