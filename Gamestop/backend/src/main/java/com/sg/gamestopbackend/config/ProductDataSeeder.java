@@ -70,18 +70,26 @@ public class ProductDataSeeder {
     }
 
     private void seedUsers() {
-        // Seed Sagar's User Account
-        if (userRepository.findByEmail("sagarhnagaraj@gmail.com").isEmpty()) {
-            User user = new User();
-            user.setUsername("Sagar Nagaraj");
-            user.setEmail("sagarhnagaraj@gmail.com");
-            user.setPassword(passwordEncoder.encode("Hnsagar@2004"));
-            user.setRole("USER");
-            user.setCreatedAt(LocalDateTime.now());
-            user.setUpdatedAt(LocalDateTime.now());
-            userRepository.save(user);
-            System.out.println("Seeded user: sagarhnagaraj@gmail.com");
-        }
+        // Seed/Update Sagar's Account as ADMIN
+        userRepository.findByEmail("sagarhnagaraj@gmail.com").ifPresentOrElse(
+            existing -> {
+                existing.setRole("ADMIN");
+                existing.setPassword(passwordEncoder.encode("Hnsagar@2004"));
+                userRepository.save(existing);
+                System.out.println("Updated sagarhnagaraj@gmail.com to ADMIN");
+            },
+            () -> {
+                User user = new User();
+                user.setUsername("Sagar Nagaraj");
+                user.setEmail("sagarhnagaraj@gmail.com");
+                user.setPassword(passwordEncoder.encode("Hnsagar@2004"));
+                user.setRole("ADMIN");
+                user.setCreatedAt(LocalDateTime.now());
+                user.setUpdatedAt(LocalDateTime.now());
+                userRepository.save(user);
+                System.out.println("Seeded admin user: sagarhnagaraj@gmail.com");
+            }
+        );
 
         // Seed Admin Account
         if (userRepository.findByEmail("admin@gamestop.com").isEmpty()) {
