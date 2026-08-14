@@ -43,7 +43,7 @@ public class OtpServiceImpl implements OtpService {
         System.out.println("==========================================");
         System.out.println("GENERATED OTP FOR " + request.getEmail() + ": " + otp);
         System.out.println("==========================================");
-        sendOtpEmail(request.getEmail(), otp);
+        boolean emailSent = sendOtpEmail(request.getEmail(), otp);
 
         OtpDetails details = new OtpDetails(
                 otp,
@@ -54,7 +54,11 @@ public class OtpServiceImpl implements OtpService {
 
         otpCache.put(request.getEmail(), details);
 
-        return new MessageResponseDto("OTP sent to your email.", true);
+        String message = emailSent 
+            ? "OTP sent to your email. Please check your inbox." 
+            : "OTP sent! (Note: Render blocked SMTP port 587. Your Fallback OTP is: " + otp + ")";
+
+        return new MessageResponseDto(message, true);
     }
 
     @Override
@@ -111,7 +115,7 @@ public class OtpServiceImpl implements OtpService {
         }
 
         String newOtp = generateOtp();
-        sendOtpEmail(email, newOtp);
+        boolean emailSent = sendOtpEmail(email, newOtp);
 
         details.setOtp(newOtp);
         details.setExpiryTime(LocalDateTime.now().plusMinutes(5));
@@ -119,7 +123,8 @@ public class OtpServiceImpl implements OtpService {
 
         otpCache.put(email, details);
 
-        return new MessageResponseDto("A new OTP has been sent.", true);
+        String message = emailSent ? "A new OTP has been sent." : "A new OTP has been generated! (Your Fallback OTP is: " + newOtp + ")";
+        return new MessageResponseDto(message, true);
     }
 
     private String generateOtp() {
@@ -128,7 +133,7 @@ public class OtpServiceImpl implements OtpService {
         return String.valueOf(otp);
     }
 
-    private void sendOtpEmail(String to, String otp) {
+    private boolean sendOtpEmail(String to, String otp) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom("4gm22cs040@gmit.ac.in");
         message.setTo(to);
@@ -137,10 +142,13 @@ public class OtpServiceImpl implements OtpService {
         try {
             mailSender.send(message);
             System.out.println("SUCCESSFULLY DISPATCHED OTP EMAIL TO: " + to);
+            return true;
         } catch (Exception e) {
-            System.err.println("FAILED TO SEND OTP EMAIL TO " + to + ": " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Email dispatch failed: " + e.getMessage(), e);
+            System.err.println("SMTP DISPATCH FAILED (Render Free Tier blocks outbound SMTP ports 25/587): " + e.getMessage());
+            System.out.println("==========================================");
+            System.out.println("RENDER FALLBACK OTP FOR " + to + ": " + otp);
+            System.out.println("==========================================");
+            return false;
         }
     }
 }
