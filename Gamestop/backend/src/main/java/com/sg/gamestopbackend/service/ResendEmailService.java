@@ -23,13 +23,15 @@ public class ResendEmailService {
             .build();
 
     public boolean sendOtpEmail(String toEmail, String otp) {
-        String apiKey = (resendApiKey != null && !resendApiKey.isBlank()) ? resendApiKey.trim() : "";
-        if (apiKey.isEmpty()) {
+        String apiKey = (resendApiKey != null && !resendApiKey.isBlank()) ? resendApiKey.trim() : System.getenv("RESEND_API_KEY");
+        if (apiKey == null || apiKey.isBlank()) {
             System.err.println("[ResendEmailService] RESEND_API_KEY environment variable is NOT configured on Render. Cannot send OTP email.");
             return false;
         }
+        apiKey = apiKey.trim();
 
-        String sender = (fromEmail != null && !fromEmail.isBlank()) ? fromEmail.trim() : "onboarding@resend.dev";
+        String envSender = System.getenv("MAIL_FROM_EMAIL");
+        String sender = (envSender != null && !envSender.isBlank()) ? envSender.trim() : ((fromEmail != null && !fromEmail.isBlank()) ? fromEmail.trim() : "onboarding@resend.dev");
         String subject = "Your GameStop Registration OTP";
         String content = "Hello,\n\nYour OTP for GameStop account registration is: " + otp + "\n\nThis OTP will expire in 5 minutes.\nIf you did not request this, please ignore this email.";
 
