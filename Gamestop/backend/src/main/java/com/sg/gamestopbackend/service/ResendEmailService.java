@@ -25,7 +25,7 @@ public class ResendEmailService {
     public boolean sendOtpEmail(String toEmail, String otp) {
         String apiKey = (resendApiKey != null && !resendApiKey.isBlank()) ? resendApiKey.trim() : "";
         if (apiKey.isEmpty()) {
-            System.err.println("RESEND_API_KEY is not configured! Cannot dispatch email via Resend HTTPS API.");
+            System.err.println("[ResendEmailService] RESEND_API_KEY environment variable is NOT configured on Render. Cannot send OTP email.");
             return false;
         }
 
