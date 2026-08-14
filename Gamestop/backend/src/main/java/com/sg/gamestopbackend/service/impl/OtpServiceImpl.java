@@ -5,8 +5,6 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +21,6 @@ import com.sg.gamestopbackend.service.ResendEmailService;
 public class OtpServiceImpl implements OtpService {
 
     private final UserRepository userRepository;
-    private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
     private final ResendEmailService resendEmailService;
 
@@ -32,11 +29,9 @@ public class OtpServiceImpl implements OtpService {
 
     @Autowired
     public OtpServiceImpl(UserRepository userRepository,
-                          @Autowired(required = false) JavaMailSender mailSender,
                           PasswordEncoder passwordEncoder,
                           ResendEmailService resendEmailService) {
         this.userRepository = userRepository;
-        this.mailSender = mailSender;
         this.passwordEncoder = passwordEncoder;
         this.resendEmailService = resendEmailService;
     }
@@ -51,7 +46,14 @@ public class OtpServiceImpl implements OtpService {
         // 2. Generate 6-digit OTP
         String otp = generateOtp();
 
-        // 3. Store pending registration data & 5-minute OTP in memory
+        // 3. Send OTP via Resend HTTPS REST API (Port 443 - works on Render Free Web Services)
+        boolean sent = resendEmailService.sendOtpEmail(request.getEmail(), otp);
+
+        if (!sent) {
+            return new MessageResponseDto("Failed to send OTP email. Please ensure RESEND_API_KEY is configured on Render.", false);
+        }
+
+        // 4. Safely store/update pending registration data & 5-minute OTP in memory
         OtpDetails details = new OtpDetails(
                 otp,
                 LocalDateTime.now().plusMinutes(5),
@@ -60,14 +62,7 @@ public class OtpServiceImpl implements OtpService {
         );
         otpCache.put(request.getEmail(), details);
 
-        // 4. Send OTP via HTTPS REST API (Port 443 - works on Render Free Tier)
-        boolean sent = dispatchOtpEmail(request.getEmail(), otp);
-
-        if (sent) {
-            return new MessageResponseDto("OTP sent to your email. Please check your inbox.", true);
-        } else {
-            return new MessageResponseDto("Failed to send OTP email. Please verify your email address or check system settings.", false);
-        }
+        return new MessageResponseDto("OTP sent to your email. Please check your inbox.", true);
     }
 
     @Override
@@ -124,7 +119,11 @@ public class OtpServiceImpl implements OtpService {
         }
 
         String newOtp = generateOtp();
-        boolean sent = dispatchOtpEmail(email, newOtp);
+        boolean sent = resendEmailService.sendOtpEmail(email, newOtp);
+
+        if (!sent) {
+            return new MessageResponseDto("Failed to send new OTP email. Please try again later.", false);
+        }
 
         details.setOtp(newOtp);
         details.setExpiryTime(LocalDateTime.now().plusMinutes(5));
@@ -132,42 +131,12 @@ public class OtpServiceImpl implements OtpService {
 
         otpCache.put(email, details);
 
-        if (sent) {
-            return new MessageResponseDto("A new OTP has been sent to your email.", true);
-        } else {
-            return new MessageResponseDto("Failed to send new OTP email. Please try again.", false);
-        }
+        return new MessageResponseDto("A new OTP has been sent to your email.", true);
     }
 
     private String generateOtp() {
         Random random = new Random();
         int otp = 100000 + random.nextInt(900000);
         return String.valueOf(otp);
-    }
-
-    private boolean dispatchOtpEmail(String toEmail, String otp) {
-        // Primary: HTTPS REST API (Port 443) via Resend / HTTP Email Service
-        boolean resendResult = resendEmailService.sendOtpEmail(toEmail, otp);
-        if (resendResult) {
-            return true;
-        }
-
-        // Secondary / Fallback: JavaMailSender (if SMTP host is accessible)
-        if (mailSender != null) {
-            try {
-                SimpleMailMessage message = new SimpleMailMessage();
-                message.setFrom("4gm22cs040@gmit.ac.in");
-                message.setTo(toEmail);
-                message.setSubject("Your GameStop Registration OTP");
-                message.setText("Your OTP for GameStop registration is: " + otp + "\n\nIt will expire in 5 minutes.");
-                mailSender.send(message);
-                System.out.println("Dispatched OTP email via SMTP to: " + toEmail);
-                return true;
-            } catch (Exception e) {
-                System.err.println("SMTP Dispatch attempt failed: " + e.getMessage());
-            }
-        }
-
-        return false;
     }
 }
