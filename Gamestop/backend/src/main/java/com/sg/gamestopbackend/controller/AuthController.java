@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 import com.sg.gamestopbackend.dto.GoogleIdTokenRequestDto;
 import com.sg.gamestopbackend.dto.LoginRequestDto;
 import com.sg.gamestopbackend.dto.LoginResponseDto;
-import com.sg.gamestopbackend.dto.RegisterRequestDto;
 import com.sg.gamestopbackend.service.AuthService;
 
 @RestController
@@ -38,15 +37,6 @@ public class AuthController {
 
         return ResponseEntity.ok(
                 authService.loginOrRegisterWithGoogle(googleIdTokenRequestDto)
-        );
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<LoginResponseDto> registerDirect(
-            @RequestBody RegisterRequestDto registerRequestDto) {
-
-        return ResponseEntity.ok(
-                authService.registerDirect(registerRequestDto)
         );
     }
 

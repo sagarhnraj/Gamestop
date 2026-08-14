@@ -29,25 +29,16 @@ export async function login(data) {
   return await parseResponse(response);
 }
 
-export async function googleLogin(idToken) {
+export async function googleLogin(payload) {
+  // payload can be a string (idToken) or object ({ idToken, enteredEmail, firstName, lastName })
+  const bodyData = typeof payload === "string" ? { idToken: payload } : payload;
+
   const response = await fetch(`${API_BASE_URL}/auth/google`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ idToken }),
-  });
-
-  return await parseResponse(response);
-}
-
-export async function registerDirect(data) {
-  const response = await fetch(`${API_BASE_URL}/auth/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
+    body: JSON.stringify(bodyData),
   });
 
   return await parseResponse(response);

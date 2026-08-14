@@ -21,7 +21,6 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.sg.gamestopbackend.dto.GoogleIdTokenRequestDto;
 import com.sg.gamestopbackend.dto.LoginRequestDto;
 import com.sg.gamestopbackend.dto.LoginResponseDto;
-import com.sg.gamestopbackend.dto.RegisterRequestDto;
 import com.sg.gamestopbackend.entity.User;
 import com.sg.gamestopbackend.repository.UserRepository;
 import com.sg.gamestopbackend.security.jwt.JwtService;
@@ -114,15 +113,29 @@ public class AuthServiceImpl implements AuthService {
         }
 
         final String targetEmail = googleEmail.trim().toLowerCase();
+
+        // Enforce Email Match Validation if user provided an email in registration form
+        String enteredEmail = googleIdTokenRequestDto.getEnteredEmail();
+        if (enteredEmail != null && !enteredEmail.isBlank()) {
+            String cleanEntered = enteredEmail.trim().toLowerCase();
+            if (!cleanEntered.equals(targetEmail)) {
+                throw new IllegalArgumentException("The selected Google account (" + targetEmail + ") does not match the entered email (" + cleanEntered + ").");
+            }
+        }
+
         Optional<User> existingUserOpt = userRepository.findByEmail(targetEmail);
 
         User user;
         if (existingUserOpt.isPresent()) {
             user = existingUserOpt.get();
-            // Existing user - preserve their role (ROLE_ADMIN or ROLE_USER) unchanged!
+            // Existing user - preserve their existing role (ROLE_ADMIN or ROLE_USER) unchanged!
         } else {
             // New user registration via Google - ALWAYS set role to ROLE_USER
-            String baseUsername = (googleName != null && !googleName.isBlank()) ? googleName.trim() : targetEmail.split("@")[0];
+            String firstName = googleIdTokenRequestDto.getFirstName() != null ? googleIdTokenRequestDto.getFirstName().trim() : "";
+            String lastName = googleIdTokenRequestDto.getLastName() != null ? googleIdTokenRequestDto.getLastName().trim() : "";
+            String formName = (firstName + " " + lastName).trim();
+
+            String baseUsername = !formName.isEmpty() ? formName : ((googleName != null && !googleName.isBlank()) ? googleName.trim() : targetEmail.split("@")[0]);
             String username = baseUsername;
             int counter = 1;
             while (userRepository.findByUsername(username).isPresent()) {
@@ -133,7 +146,9 @@ public class AuthServiceImpl implements AuthService {
             user = new User();
             user.setEmail(targetEmail);
             user.setUsername(username);
-            user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString())); // Secure random password
+            
+            // Generate a secure random internal BCrypt password hash to satisfy database non-null requirement
+            user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
             user.setRole("ROLE_USER");
             user.setCreatedAt(LocalDateTime.now());
             user.setUpdatedAt(LocalDateTime.now());
@@ -150,52 +165,5 @@ public class AuthServiceImpl implements AuthService {
                 user.getUsername(),
                 user.getRole(),
                 "Google Authentication Successful");
-    }
-
-    @Override
-    @Transactional
-    public LoginResponseDto registerDirect(RegisterRequestDto registerRequestDto) {
-        if (registerRequestDto == null || registerRequestDto.getEmail() == null || registerRequestDto.getEmail().isBlank()) {
-            throw new IllegalArgumentException("Email is required for registration");
-        }
-
-        String email = registerRequestDto.getEmail().trim().toLowerCase();
-
-        if (userRepository.findByEmail(email).isPresent()) {
-            throw new IllegalArgumentException("Email is already registered. Please login.");
-        }
-
-        String firstName = registerRequestDto.getFirstName() != null ? registerRequestDto.getFirstName().trim() : "";
-        String lastName = registerRequestDto.getLastName() != null ? registerRequestDto.getLastName().trim() : "";
-        String baseUsername = (firstName + " " + lastName).trim();
-        if (baseUsername.isEmpty()) {
-            baseUsername = email.split("@")[0];
-        }
-
-        String username = baseUsername;
-        int counter = 1;
-        while (userRepository.findByUsername(username).isPresent()) {
-            username = baseUsername + counter;
-            counter++;
-        }
-
-        User newUser = new User();
-        newUser.setEmail(email);
-        newUser.setUsername(username);
-        newUser.setPassword(passwordEncoder.encode(registerRequestDto.getPassword()));
-        newUser.setRole("ROLE_USER");
-        newUser.setCreatedAt(LocalDateTime.now());
-        newUser.setUpdatedAt(LocalDateTime.now());
-
-        User savedUser = userRepository.save(newUser);
-
-        String jwtToken = jwtService.generateToken(savedUser.getEmail());
-
-        return new LoginResponseDto(
-                jwtToken,
-                savedUser.getUserId(),
-                savedUser.getUsername(),
-                savedUser.getRole(),
-                "Registration Successful");
     }
 }

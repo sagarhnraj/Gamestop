@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { googleLogin } from "../../services/authService";
 import { FcGoogle } from "react-icons/fc";
 
-function GoogleLoginButton({ onSuccess }) {
+function GoogleLoginButton({ onCredentialResponse, onSuccess }) {
   const navigate = useNavigate();
   const buttonRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -15,10 +15,15 @@ function GoogleLoginButton({ onSuccess }) {
     if (!clientId) return;
 
     const handleCredentialResponse = async (response) => {
+      if (onCredentialResponse) {
+        onCredentialResponse(response.credential);
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
-        const data = await googleLogin(response.credential);
+        const data = await googleLogin({ idToken: response.credential });
 
         if (data.token) {
           localStorage.setItem("token", String(data.token));
@@ -70,7 +75,7 @@ function GoogleLoginButton({ onSuccess }) {
       script.onload = initializeGoogleSignIn;
       document.head.appendChild(script);
     }
-  }, [clientId, navigate, onSuccess]);
+  }, [clientId, navigate, onCredentialResponse, onSuccess]);
 
   if (!clientId) {
     return (
@@ -79,7 +84,7 @@ function GoogleLoginButton({ onSuccess }) {
           type="button"
           onClick={() =>
             alert(
-              "Google Sign-In configuration required: Please add VITE_GOOGLE_CLIENT_ID to Vercel/environment variables."
+              "Google Sign-In configuration required: Please add VITE_GOOGLE_CLIENT_ID to environment variables."
             )
           }
           className="w-full flex items-center justify-center gap-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-3 px-4 rounded-xl border border-zinc-700 transition"
