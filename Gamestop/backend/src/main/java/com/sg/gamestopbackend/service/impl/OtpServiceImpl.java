@@ -46,14 +46,7 @@ public class OtpServiceImpl implements OtpService {
         // 2. Generate 6-digit OTP
         String otp = generateOtp();
 
-        // 3. Send OTP via Resend HTTPS REST API (Port 443 - works on Render Free Web Services)
-        boolean sent = resendEmailService.sendOtpEmail(request.getEmail(), otp);
-
-        if (!sent) {
-            return new MessageResponseDto("Failed to send OTP email. Please ensure RESEND_API_KEY is configured on Render.", false);
-        }
-
-        // 4. Safely store/update pending registration data & 5-minute OTP in memory
+        // 3. Store/update pending registration data & 5-minute OTP in memory
         OtpDetails details = new OtpDetails(
                 otp,
                 LocalDateTime.now().plusMinutes(5),
@@ -62,7 +55,14 @@ public class OtpServiceImpl implements OtpService {
         );
         otpCache.put(request.getEmail(), details);
 
-        return new MessageResponseDto("OTP sent to your email. Please check your inbox.", true);
+        // 4. Send OTP via Resend HTTPS REST API (Port 443 - works on Render Free Web Services)
+        boolean sent = resendEmailService.sendOtpEmail(request.getEmail(), otp);
+
+        if (sent) {
+            return new MessageResponseDto("OTP sent to your email. Please check your inbox.", true);
+        } else {
+            return new MessageResponseDto("Failed to send OTP email. Resend testing mode only delivers emails to 4gm22cs040@gmit.ac.in. Verify a domain at resend.com/domains to send to all emails.", false);
+        }
     }
 
     @Override
