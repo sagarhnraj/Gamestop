@@ -140,6 +140,7 @@ public class OtpServiceImpl implements OtpService {
         } catch (Exception e) {
             System.err.println("FAILED TO SEND OTP EMAIL TO " + to + ": " + e.getMessage());
             e.printStackTrace();
+            throw new RuntimeException("Email dispatch failed: " + e.getMessage(), e);
         }
     }
 }
