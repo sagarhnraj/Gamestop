@@ -54,7 +54,7 @@ public class OtpServiceImpl implements OtpService {
 
         otpCache.put(request.getEmail(), details);
 
-        return new MessageResponseDto("OTP sent to your email! (OTP Code: " + otp + ")", true);
+        return new MessageResponseDto("OTP sent to your email.", true);
     }
 
     @Override
