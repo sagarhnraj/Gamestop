@@ -136,8 +136,10 @@ public class OtpServiceImpl implements OtpService {
         message.setText("Your OTP for GameStop registration is: " + otp + "\n\nIt will expire in 5 minutes.");
         try {
             mailSender.send(message);
+            System.out.println("SUCCESSFULLY DISPATCHED OTP EMAIL TO: " + to);
         } catch (Exception e) {
-            System.err.println("Failed to send email to " + to + ": " + e.getMessage());
+            System.err.println("FAILED TO SEND OTP EMAIL TO " + to + ": " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
