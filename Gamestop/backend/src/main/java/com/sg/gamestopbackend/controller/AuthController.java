@@ -6,8 +6,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sg.gamestopbackend.dto.GoogleIdTokenRequestDto;
 import com.sg.gamestopbackend.dto.LoginRequestDto;
 import com.sg.gamestopbackend.dto.LoginResponseDto;
+import com.sg.gamestopbackend.dto.RegisterRequestDto;
 import com.sg.gamestopbackend.service.AuthService;
 
 @RestController
@@ -15,11 +18,9 @@ import com.sg.gamestopbackend.service.AuthService;
 public class AuthController {
 
     private final AuthService authService;
-    private final com.sg.gamestopbackend.service.OtpService otpService;
 
-    public AuthController(AuthService authService, com.sg.gamestopbackend.service.OtpService otpService) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
-        this.otpService = otpService;
     }
 
     @PostMapping("/login")
@@ -31,22 +32,22 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/register/initiate")
-    public ResponseEntity<com.sg.gamestopbackend.dto.MessageResponseDto> initiateRegistration(
-            @RequestBody com.sg.gamestopbackend.dto.RegisterRequestDto registerRequestDto) {
-        return ResponseEntity.ok(otpService.initiateRegistration(registerRequestDto));
+    @PostMapping("/google")
+    public ResponseEntity<LoginResponseDto> googleAuth(
+            @RequestBody GoogleIdTokenRequestDto googleIdTokenRequestDto) {
+
+        return ResponseEntity.ok(
+                authService.loginOrRegisterWithGoogle(googleIdTokenRequestDto)
+        );
     }
 
-    @PostMapping("/register/verify")
-    public ResponseEntity<com.sg.gamestopbackend.dto.MessageResponseDto> verifyOtp(
-            @RequestBody com.sg.gamestopbackend.dto.OtpVerifyRequestDto otpVerifyRequestDto) {
-        return ResponseEntity.ok(otpService.verifyOtp(otpVerifyRequestDto));
-    }
+    @PostMapping("/register")
+    public ResponseEntity<LoginResponseDto> registerDirect(
+            @RequestBody RegisterRequestDto registerRequestDto) {
 
-    @PostMapping("/register/resend")
-    public ResponseEntity<com.sg.gamestopbackend.dto.MessageResponseDto> resendOtp(
-            @RequestBody java.util.Map<String, String> requestBody) {
-        return ResponseEntity.ok(otpService.resendOtp(requestBody.get("email")));
+        return ResponseEntity.ok(
+                authService.registerDirect(registerRequestDto)
+        );
     }
 
     @GetMapping("/test")
