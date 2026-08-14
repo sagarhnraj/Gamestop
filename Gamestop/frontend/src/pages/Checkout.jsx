@@ -39,6 +39,18 @@ function Checkout() {
 
       const paymentOrder = await createPaymentOrder();
 
+      if (!paymentOrder.razorpayKeyId || (paymentOrder.razorpayOrderId && paymentOrder.razorpayOrderId.startsWith("order_dummy_"))) {
+        await verifyPayment({
+          orderId: paymentOrder.orderId,
+          razorpayOrderId: paymentOrder.razorpayOrderId || ("order_dummy_" + Date.now()),
+          razorpayPaymentId: "pay_dummy_" + Date.now(),
+          razorpaySignature: "dummy_signature",
+        });
+        await clearCart();
+        navigate("/payment-success");
+        return;
+      }
+
       const options = {
         key: paymentOrder.razorpayKeyId,
         amount: paymentOrder.amount,
