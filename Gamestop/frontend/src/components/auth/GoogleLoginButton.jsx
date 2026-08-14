@@ -9,7 +9,7 @@ function GoogleLoginButton({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "921251241673-r8ae5rnbv041nrhs7s943ueiv2eqa2hf.apps.googleusercontent.com";
 
   useEffect(() => {
     if (!clientId) return;
