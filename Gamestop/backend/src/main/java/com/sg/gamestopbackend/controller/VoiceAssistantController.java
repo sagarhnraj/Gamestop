@@ -11,6 +11,10 @@ import com.sg.gamestopbackend.dto.VoiceAssistantRequestDto;
 import com.sg.gamestopbackend.dto.VoiceAssistantResponseDto;
 import com.sg.gamestopbackend.service.VoiceAssistantService;
 
+import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
+import com.sg.gamestopbackend.dto.VoiceSuggestionDto;
+
 @RestController
 @RequestMapping("/api/voice")
 @CrossOrigin(origins = "*")
@@ -28,5 +32,11 @@ public class VoiceAssistantController {
 
         VoiceAssistantResponseDto response = voiceAssistantService.processVoiceQuery(requestDto);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<List<VoiceSuggestionDto>> getVoiceSuggestions() {
+        List<VoiceSuggestionDto> suggestions = voiceAssistantService.getDynamicSuggestions();
+        return ResponseEntity.ok(suggestions);
     }
 }

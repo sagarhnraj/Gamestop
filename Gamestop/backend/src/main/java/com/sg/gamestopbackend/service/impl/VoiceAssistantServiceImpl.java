@@ -22,6 +22,7 @@ import com.sg.gamestopbackend.dto.CategoryDto;
 import com.sg.gamestopbackend.dto.ProductDto;
 import com.sg.gamestopbackend.dto.VoiceAssistantRequestDto;
 import com.sg.gamestopbackend.dto.VoiceAssistantResponseDto;
+import com.sg.gamestopbackend.dto.VoiceSuggestionDto;
 import com.sg.gamestopbackend.entity.Category;
 import com.sg.gamestopbackend.entity.Product;
 import com.sg.gamestopbackend.entity.ProductImage;
@@ -113,6 +114,61 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
                 keywords,
                 matchedProducts
         );
+    }
+
+    @Override
+    public List<VoiceSuggestionDto> getDynamicSuggestions() {
+        List<VoiceSuggestionDto> verifiedSuggestions = new ArrayList<>();
+
+        // 1. Get Categories that actually have products in MySQL
+        List<Category> categories = categoryRepository.findAll();
+        for (Category c : categories) {
+            String name = c.getName() != null ? c.getName() : c.getCategoryName();
+            if (name == null || name.trim().isEmpty()) continue;
+
+            long count = productRepository.countByCategory_CategoryId(c.getCategoryId());
+            if (count > 0) {
+                String queryText = "Show me " + name;
+                // Verify that query returns > 0 products
+                List<Product> matches = productRepository.searchVoiceProducts(null, name, null);
+                if (matches.isEmpty()) {
+                    matches = productRepository.searchVoiceProducts(name, null, null);
+                }
+
+                if (!matches.isEmpty()) {
+                    String icon = getCategoryIcon(name);
+                    verifiedSuggestions.add(new VoiceSuggestionDto(icon + " " + name, queryText));
+                }
+            }
+        }
+
+        // 2. Dynamic Price Threshold Suggestions (e.g. Below ₹3000 / Below ₹5000)
+        List<BigDecimal> testPrices = Arrays.asList(new BigDecimal("3000"), new BigDecimal("5000"), new BigDecimal("10000"));
+        for (BigDecimal price : testPrices) {
+            List<Product> priceMatches = productRepository.searchVoiceProducts(null, null, price);
+            if (!priceMatches.isEmpty()) {
+                verifiedSuggestions.add(new VoiceSuggestionDto("💰 Below ₹" + price.intValue(), "Show items below " + price.intValue()));
+                break; // Add one verified price suggestion
+            }
+        }
+
+        // Limit to top 4 verified suggestions
+        if (verifiedSuggestions.size() > 4) {
+            return verifiedSuggestions.subList(0, 4);
+        }
+
+        return verifiedSuggestions;
+    }
+
+    private String getCategoryIcon(String catName) {
+        String lower = catName.toLowerCase();
+        if (lower.contains("game")) return "🎮";
+        if (lower.contains("console")) return "🕹️";
+        if (lower.contains("accessori") || lower.contains("setup")) return "🔌";
+        if (lower.contains("head")) return "🎧";
+        if (lower.contains("mouse")) return "🖱️";
+        if (lower.contains("keyb")) return "⌨️";
+        return "📦";
     }
 
     private String classifyIntentWithHuggingFace(String rawQuery, String lowerQuery) {

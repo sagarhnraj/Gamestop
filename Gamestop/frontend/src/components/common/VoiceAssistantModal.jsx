@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar } from "react-icons/fa";
-import { processVoiceQuery } from "../../services/voiceService";
+import { processVoiceQuery, getVoiceSuggestions } from "../../services/voiceService";
 import { useCart } from "../../context/CartContext";
 
 function VoiceAssistantModal() {
@@ -13,9 +13,23 @@ function VoiceAssistantModal() {
   const [lastQuery, setLastQuery] = useState("");
   const [aiResponse, setAiResponse] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
 
   const { addToCart } = useCart();
   const recognitionRef = useRef(null);
+
+  // Fetch verified dynamic suggestions from MySQL database when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      getVoiceSuggestions()
+        .then((data) => {
+          if (Array.isArray(data) && data.length > 0) {
+            setSuggestions(data);
+          }
+        })
+        .catch((err) => console.error("Error loading voice suggestions:", err));
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     // Initialize Browser SpeechRecognition if supported
@@ -256,28 +270,21 @@ function VoiceAssistantModal() {
               </div>
             </div>
 
-            {/* Quick Suggestion Pills */}
-            <div className="flex flex-wrap gap-2 pt-1">
-              <span className="text-xs text-gray-400 w-full mb-1">Quick Suggestions:</span>
-              <button
-                onClick={() => handleQuickPrompt("Find me a gaming mouse under 2000 rupees.")}
-                className="bg-zinc-900 hover:bg-zinc-800 text-xs text-gray-300 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-800 transition"
-              >
-                🖱️ Mouse under ₹2000
-              </button>
-              <button
-                onClick={() => handleQuickPrompt("Show me gaming headsets.")}
-                className="bg-zinc-900 hover:bg-zinc-800 text-xs text-gray-300 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-800 transition"
-              >
-                🎧 Gaming Headsets
-              </button>
-              <button
-                onClick={() => handleQuickPrompt("Show headphones below 3000.")}
-                className="bg-zinc-900 hover:bg-zinc-800 text-xs text-gray-300 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-800 transition"
-              >
-                🎵 Below ₹3000
-              </button>
-            </div>
+            {/* Dynamic Database-Aware Quick Suggestion Pills */}
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="text-xs text-gray-400 w-full mb-1">Quick Suggestions:</span>
+                {suggestions.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleQuickPrompt(item.query)}
+                    className="bg-zinc-900 hover:bg-zinc-800 text-xs text-gray-300 hover:text-white px-3 py-1.5 rounded-lg border border-zinc-800 transition"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* AI Natural Language Response */}
             {aiResponse && (

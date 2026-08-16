@@ -20,3 +20,23 @@ export const processVoiceQuery = async (queryText) => {
     throw error;
   }
 };
+
+export const getVoiceSuggestions = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/voice/suggestions`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned error ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Get Voice Suggestions Error:", error);
+    return [];
+  }
+};
