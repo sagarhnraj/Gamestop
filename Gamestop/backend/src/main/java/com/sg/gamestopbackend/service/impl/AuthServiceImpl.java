@@ -128,9 +128,22 @@ public class AuthServiceImpl implements AuthService {
         User user;
         if (existingUserOpt.isPresent()) {
             user = existingUserOpt.get();
-            // Existing user - preserve their existing role (ROLE_ADMIN or ROLE_USER) unchanged!
+            // If existing user and password provided, update encoded password if requested
+            if (googleIdTokenRequestDto.getPassword() != null && !googleIdTokenRequestDto.getPassword().isBlank()) {
+                user.setPassword(passwordEncoder.encode(googleIdTokenRequestDto.getPassword().trim()));
+                user.setUpdatedAt(LocalDateTime.now());
+                user = userRepository.save(user);
+            }
         } else {
-            // New user registration via Google - ALWAYS set role to ROLE_USER
+            // New user registration via Google - require valid entered password
+            String rawPassword = googleIdTokenRequestDto.getPassword();
+            if (rawPassword == null || rawPassword.isBlank()) {
+                throw new IllegalArgumentException("Password is required to complete registration");
+            }
+            if (rawPassword.trim().length() < 6) {
+                throw new IllegalArgumentException("Password must be at least 6 characters");
+            }
+
             String firstName = googleIdTokenRequestDto.getFirstName() != null ? googleIdTokenRequestDto.getFirstName().trim() : "";
             String lastName = googleIdTokenRequestDto.getLastName() != null ? googleIdTokenRequestDto.getLastName().trim() : "";
             String formName = (firstName + " " + lastName).trim();
@@ -147,8 +160,8 @@ public class AuthServiceImpl implements AuthService {
             user.setEmail(targetEmail);
             user.setUsername(username);
             
-            // Generate a secure random internal BCrypt password hash to satisfy database non-null requirement
-            user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
+            // Encode password using BCrypt PasswordEncoder
+            user.setPassword(passwordEncoder.encode(rawPassword.trim()));
             user.setRole("ROLE_USER");
             user.setCreatedAt(LocalDateTime.now());
             user.setUpdatedAt(LocalDateTime.now());

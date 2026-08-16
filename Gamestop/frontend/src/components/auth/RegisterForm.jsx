@@ -3,13 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import Input from "../common/Input";
 import GoogleLoginButton from "./GoogleLoginButton";
 import { googleLogin } from "../../services/authService";
-import { FcGoogle } from "react-icons/fc";
+import { FaCheckCircle } from "react-icons/fa";
 
 function RegisterForm() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -34,50 +35,61 @@ function RegisterForm() {
     setInfoMessage("");
   };
 
-  const processGoogleCredential = async (idToken) => {
+  const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
-    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
-    if (!formData.email.trim()) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) newErrors.email = "Enter a valid email address";
-
-    if (formData.password && formData.password.length < 6) {
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "First name is required";
+    }
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Last name is required";
+    }
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) {
+      newErrors.email = "Enter a valid email address";
+    }
+    if (!formData.password) {
+      newErrors.password = "Password is required";
+    } else if (formData.password.length < 6) {
       newErrors.password = "Minimum 6 characters required";
     }
-
-    if (formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword) {
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+    } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match";
     }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const processGoogleCredential = async (idToken) => {
+    if (!validateForm()) {
+      setApiError("Please fix the validation errors in the registration form before verifying with Google.");
       return;
     }
 
     try {
       setLoading(true);
       setApiError("");
-      setInfoMessage("Verifying Google ID Token with GameStop backend...");
+      setInfoMessage("Verifying Google ID Token & creating account...");
 
       const payload = {
         idToken,
         enteredEmail: formData.email.trim(),
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
+        password: formData.password.trim(),
       };
 
       const data = await googleLogin(payload);
 
-      if (data.token) {
-        localStorage.setItem("token", String(data.token));
-        if (data.userId) localStorage.setItem("userId", String(data.userId));
-        if (data.username) localStorage.setItem("username", String(data.username));
-
-        alert("Google Verification Successful! Welcome to GameStop.");
-        navigate("/");
+      if (data && (data.token || data.userId || data.message)) {
+        // DO NOT store tokens in localStorage (No automatic login!)
+        setShowSuccessModal(true);
       } else {
-        setApiError("Authentication failed: No token returned.");
+        setApiError("Registration failed: Invalid response from backend.");
       }
     } catch (err) {
       console.error("Registration error:", err);
@@ -88,30 +100,13 @@ function RegisterForm() {
     }
   };
 
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
-    const newErrors = {};
-
-    if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
-    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
-    if (!formData.email.trim()) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email.trim())) newErrors.email = "Enter a valid email";
-    if (formData.password && formData.password.length < 6) newErrors.password = "Minimum 6 characters";
-    if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = "Passwords do not match";
-
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length === 0) {
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.prompt();
-      } else {
-        setInfoMessage("Registration details validated! Please click 'Continue with Google' below to complete account creation.");
-      }
-    }
+  const handleGoToLogin = () => {
+    setShowSuccessModal(false);
+    navigate("/login");
   };
 
   return (
-    <div className="w-full max-w-md bg-zinc-900 rounded-xl p-8 shadow-xl">
+    <div className="w-full max-w-md bg-zinc-900 rounded-xl p-8 shadow-xl relative">
       <h1 className="text-3xl font-bold text-center text-white mb-2">
         Create Account
       </h1>
@@ -132,7 +127,7 @@ function RegisterForm() {
         </div>
       )}
 
-      <form onSubmit={handleFormSubmit} className="space-y-4 mb-6">
+      <div className="space-y-4 mb-6">
         <Input
           label="First Name"
           placeholder="John"
@@ -176,29 +171,47 @@ function RegisterForm() {
           error={errors.confirmPassword}
           disabled={loading}
         />
+      </div>
 
-        {/* Primary Red Action Button explicitly labeled 'Continue with Google' */}
-        <button
-          type="submit"
+      {/* Exactly ONE Google Button rendered */}
+      <div className="mb-6">
+        <GoogleLoginButton
+          onCredentialResponse={processGoogleCredential}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg text-base cursor-pointer"
-        >
-          <FcGoogle className="text-2xl bg-white rounded-full p-0.5" />
-          <span>{loading ? "Verifying Google Identity..." : "Continue with Google"}</span>
-        </button>
-      </form>
-
-      {/* Render Google Identity Services Component */}
-      <div className="space-y-2">
-        <GoogleLoginButton onCredentialResponse={processGoogleCredential} />
+        />
       </div>
 
       <p className="text-center text-zinc-400 mt-6">
         Already have an account?{" "}
-        <Link to="/login" className="text-red-500 hover:text-red-400">
+        <Link to="/login" className="text-red-500 hover:text-red-400 font-semibold">
           Login
         </Link>
       </p>
+
+      {/* Registration Success Modal Popup */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl space-y-5">
+            <FaCheckCircle className="text-emerald-500 text-6xl mx-auto" />
+            
+            <h2 className="text-2xl font-bold text-white">
+              Account Created Successfully!
+            </h2>
+            
+            <p className="text-zinc-300 text-sm leading-relaxed">
+              Your account has been created successfully. You can now log in with your email and password.
+            </p>
+            
+            <button
+              type="button"
+              onClick={handleGoToLogin}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-lg cursor-pointer"
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Input from "../common/Input";
 import Button from "../common/Button";
-import GoogleLoginButton from "./GoogleLoginButton";
 import { login } from "../../services/authService";
 
 function LoginForm() {
@@ -65,18 +64,6 @@ function LoginForm() {
 
   return (
     <div className="mt-8 space-y-6">
-      {/* Google Sign In */}
-      <GoogleLoginButton />
-
-      {/* Divider */}
-      <div className="relative flex items-center justify-center my-4">
-        <div className="border-t border-zinc-800 w-full"></div>
-        <span className="bg-zinc-950 px-3 text-xs text-zinc-500 uppercase tracking-wider font-semibold">
-          Or sign in with email
-        </span>
-        <div className="border-t border-zinc-800 w-full"></div>
-      </div>
-
       {/* Email / Password Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
