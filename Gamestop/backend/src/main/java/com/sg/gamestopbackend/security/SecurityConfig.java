@@ -95,6 +95,7 @@ public class SecurityConfig {
 
                         // Public APIs
                         .requestMatchers("/api/auth", "/api/auth/**").permitAll()
+                        .requestMatchers("/api/voice", "/api/voice/**").permitAll()
                         .requestMatchers("/api/products", "/api/products/**").permitAll()
                         .requestMatchers("/api/categories", "/api/categories/**").permitAll()
                         .requestMatchers("/api/cart", "/api/cart/**").permitAll()

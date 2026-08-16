@@ -21,105 +21,79 @@ import AdminOrders from "./pages/AdminOrders";
 import AdminProfile from "./pages/AdminProfile";
 import ProtectedAdminRoute from "./components/admin/ProtectedAdminRoute";
 
+import VoiceAssistantModal from "./components/common/VoiceAssistantModal";
+
 function App() {
   return (
-    <Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/wishlist" element={<Wishlist />} />
+        <Route path="/product/:id" element={<ProductDetails />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/my-orders" element={<Orders />} />
+        <Route path="/profile" element={<Profile />} />
 
-      <Route path="/" element={<Home />} />
-
-      <Route path="/login" element={<Login />} />
-
-      <Route path="/register" element={<Register />} />
-
-      <Route
-        path="/forgot-password"
-        element={<ForgotPassword />}
-      />
-
-      <Route
-        path="/products"
-        element={<Products />}
-      />
-       
-       <Route
-       path="/cart"
-       element={<Cart />}
-       />
-
-       <Route
-       path="/wishlist"
-       element={<Wishlist />}
-       />
-
-      <Route
-        path="/product/:id"
-        element={<ProductDetails />}
-      />
-      <Route path="/checkout" element={<Checkout />} />
-
-       <Route
-        path="/payment-success"
-        element={<PaymentSuccess />}
-       />
-
-      <Route path="/orders" element={<Orders />} />
-      <Route path="/my-orders" element={<Orders />} />
-
-      <Route path="/profile" element={<Profile />} />
-
-      {/* Admin Routes */}
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route
-        path="/admin/dashboard"
-        element={
-          <ProtectedAdminRoute>
-            <AdminDashboard />
-          </ProtectedAdminRoute>
-        }
-      />
-      <Route
-        path="/admin/products"
-        element={
-          <ProtectedAdminRoute>
-            <AdminProducts />
-          </ProtectedAdminRoute>
-        }
-      />
-      <Route
-        path="/admin/categories"
-        element={
-          <ProtectedAdminRoute>
-            <AdminCategories />
-          </ProtectedAdminRoute>
-        }
-      />
-      <Route
-        path="/admin/users"
-        element={
-          <ProtectedAdminRoute>
-            <AdminUsers />
-          </ProtectedAdminRoute>
-        }
-      />
-      <Route
-        path="/admin/orders"
-        element={
-          <ProtectedAdminRoute>
-            <AdminOrders />
-          </ProtectedAdminRoute>
-        }
-      />
-      <Route
-        path="/admin/profile"
-        element={
-          <ProtectedAdminRoute>
-            <AdminProfile />
-          </ProtectedAdminRoute>
-        }
-      />
-
-    </Routes>
-    
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <ProtectedAdminRoute>
+              <AdminDashboard />
+            </ProtectedAdminRoute>
+          }
+        />
+        <Route
+          path="/admin/products"
+          element={
+            <ProtectedAdminRoute>
+              <AdminProducts />
+            </ProtectedAdminRoute>
+          }
+        />
+        <Route
+          path="/admin/categories"
+          element={
+            <ProtectedAdminRoute>
+              <AdminCategories />
+            </ProtectedAdminRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedAdminRoute>
+              <AdminUsers />
+            </ProtectedAdminRoute>
+          }
+        />
+        <Route
+          path="/admin/orders"
+          element={
+            <ProtectedAdminRoute>
+              <AdminOrders />
+            </ProtectedAdminRoute>
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <ProtectedAdminRoute>
+              <AdminProfile />
+            </ProtectedAdminRoute>
+          }
+        />
+      </Routes>
+      <VoiceAssistantModal />
+    </>
   );
 }
 
