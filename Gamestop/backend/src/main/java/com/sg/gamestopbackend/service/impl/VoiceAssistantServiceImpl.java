@@ -85,12 +85,15 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
         // 5. Query REAL Database (ProductRepository) - MySQL is 100% source of truth
         List<Product> matchedEntities = productRepository.searchVoiceProducts(primaryKeyword, category, maxPrice);
 
-        // Fallback: If strict search returns empty, try broader matching by keyword or category
+        // Fallback: If strict search returns empty, try broader matching by keyword or category or maxPrice
         if (matchedEntities.isEmpty() && (category != null || maxPrice != null || primaryKeyword != null)) {
             matchedEntities = productRepository.searchVoiceProducts(primaryKeyword, null, maxPrice);
         }
         if (matchedEntities.isEmpty() && category != null) {
             matchedEntities = productRepository.searchVoiceProducts(null, category, null);
+        }
+        if (matchedEntities.isEmpty() && maxPrice != null) {
+            matchedEntities = productRepository.searchVoiceProducts(null, null, maxPrice);
         }
 
         // Convert matched entities to ProductDto list
