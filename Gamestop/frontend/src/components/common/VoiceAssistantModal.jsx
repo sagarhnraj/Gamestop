@@ -22,6 +22,7 @@ function VoiceAssistantModal() {
 
   const { addToCart, removeFromCart, clearCart, loadCart } = useCart();
   const recognitionRef = useRef(null);
+  const wakeWordRecognitionRef = useRef(null);
   const latestVoiceTranscriptRef = useRef("");
   const handleSendQueryRef = useRef(null);
   const lastAiProductRef = useRef(null);
@@ -98,6 +99,93 @@ function VoiceAssistantModal() {
         .catch((err) => console.error("Error loading voice suggestions:", err));
     }
   }, [shouldRenderAI, isOpen]);
+
+  // Hands-Free "Hey GameStop" Wake Word Activation Listener
+  useEffect(() => {
+    if (!shouldRenderAI) return;
+
+    const SpeechRecognition =
+      typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    if (!SpeechRecognition) return;
+
+    try {
+      const wakeRec = new SpeechRecognition();
+      wakeRec.continuous = true;
+      wakeRec.interimResults = true;
+      wakeRec.lang = "en-US";
+
+      wakeRec.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript.toLowerCase();
+
+          if (
+            transcript.includes("hey gamestop") ||
+            transcript.includes("hey game stop") ||
+            transcript.includes("hi gamestop") ||
+            transcript.includes("hello gamestop") ||
+            transcript.includes("ok gamestop")
+          ) {
+            setIsOpen(true);
+            stopSpeech();
+
+            // Extract any follow-up command spoken after the wake word
+            const cleanQuery = transcript
+              .replace(/hey\s*game\s*stop/g, "")
+              .replace(/hi\s*game\s*stop/g, "")
+              .replace(/hello\s*game\s*stop/g, "")
+              .replace(/ok\s*game\s*stop/g, "")
+              .replace(/gamestop/g, "")
+              .trim();
+
+            if (cleanQuery.length > 2) {
+              if (handleSendQueryRef.current) {
+                handleSendQueryRef.current(cleanQuery);
+              }
+            } else {
+              speakText("GameStop AI active! How can I help you?");
+              setTimeout(() => {
+                if (recognitionRef.current) {
+                  try {
+                    recognitionRef.current.start();
+                  } catch (e) {}
+                }
+              }, 1200);
+            }
+            break;
+          }
+        }
+      };
+
+      wakeRec.onerror = () => {
+        // Silently ignore background wake word listener errors
+      };
+
+      wakeRec.onend = () => {
+        if (shouldRenderAI && !isListening) {
+          try {
+            wakeRec.start();
+          } catch (e) {}
+        }
+      };
+
+      try {
+        wakeRec.start();
+      } catch (e) {}
+
+      wakeWordRecognitionRef.current = wakeRec;
+    } catch (e) {
+      console.warn("Wake word listener initialization error:", e);
+    }
+
+    return () => {
+      if (wakeWordRecognitionRef.current) {
+        try {
+          wakeWordRecognitionRef.current.stop();
+        } catch (e) {}
+      }
+    };
+  }, [shouldRenderAI, isListening]);
 
   useEffect(() => {
     if (!shouldRenderAI) return;
@@ -188,8 +276,18 @@ function VoiceAssistantModal() {
   };
 
   const handleSendQuery = async (promptToUse) => {
-    const textToSend = promptToUse || queryText;
-    if (!textToSend || !textToSend.trim()) return;
+    let rawText = promptToUse || queryText;
+    if (!rawText || !rawText.trim()) return;
+
+    // Clean wake-word prefixes if user spoke "Hey GameStop ..."
+    const textToSend = rawText
+      .replace(/^hey\s*game\s*stop\s*/i, "")
+      .replace(/^hi\s*game\s*stop\s*/i, "")
+      .replace(/^hello\s*game\s*stop\s*/i, "")
+      .replace(/^ok\s*game\s*stop\s*/i, "")
+      .trim();
+
+    if (!textToSend) return;
 
     // Clear input box and voice ref after message is sent
     setQueryText("");
@@ -358,7 +456,7 @@ function VoiceAssistantModal() {
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-6 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold px-5 py-3.5 rounded-full shadow-2xl flex items-center gap-3 transition-all duration-300 transform hover:scale-105 z-50 border border-red-400/30"
-          title="Ask GameStop AI Voice Assistant"
+          title="Ask GameStop AI Voice Assistant (Say 'Hey GameStop')"
         >
           <div className="relative">
             <FaMicrophone className="text-xl animate-pulse" />
@@ -382,7 +480,7 @@ function VoiceAssistantModal() {
               </div>
               <div>
                 <h3 className="font-bold text-white text-base">GameStop AI Voice Assistant</h3>
-                <p className="text-xs text-gray-400">Natural Voice & Controlled Ecommerce Shopping</p>
+                <p className="text-xs text-gray-400">Say "Hey GameStop" • Natural Voice AI</p>
               </div>
             </div>
             <button
@@ -431,7 +529,7 @@ function VoiceAssistantModal() {
             {/* Query Input Box */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Voice / Text Query
+                Voice / Text Query (Wake Word: "Hey GameStop")
               </label>
               <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2 focus-within:border-red-500 transition">
                 <button
@@ -457,7 +555,7 @@ function VoiceAssistantModal() {
                       }
                     }
                   }}
-                  placeholder='Try: "Add 2 of the top product to my cart"'
+                  placeholder='Try saying "Hey GameStop find me a gaming mouse under 2000"'
                   className="w-full bg-transparent text-sm text-white focus:outline-none placeholder-gray-500"
                 />
                 <button
