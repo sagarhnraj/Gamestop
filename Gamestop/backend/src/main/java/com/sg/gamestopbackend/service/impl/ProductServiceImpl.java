@@ -5,14 +5,13 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
+import com.sg.gamestopbackend.config.ProductDataSeeder;
 import com.sg.gamestopbackend.dto.CategoryDto;
 import com.sg.gamestopbackend.dto.ProductDto;
 import com.sg.gamestopbackend.entity.Category;
 import com.sg.gamestopbackend.entity.Product;
-import com.sg.gamestopbackend.entity.ProductImage;
 import com.sg.gamestopbackend.exception.ResourceNotFoundException;
 import com.sg.gamestopbackend.repository.CategoryRepository;
-import com.sg.gamestopbackend.repository.ProductImageRepository;
 import com.sg.gamestopbackend.repository.ProductRepository;
 import com.sg.gamestopbackend.service.ProductService;
 
@@ -21,20 +20,24 @@ public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
-    private final ProductImageRepository productImageRepository;
+    private final ProductDataSeeder productDataSeeder;
 
     public ProductServiceImpl(
             ProductRepository productRepository,
             CategoryRepository categoryRepository,
-            ProductImageRepository productImageRepository) {
+            ProductDataSeeder productDataSeeder) {
 
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
-        this.productImageRepository = productImageRepository;
+        this.productDataSeeder = productDataSeeder;
     }
 
     @Override
     public List<ProductDto> getAllProducts() {
+        if (productRepository.count() == 0) {
+            System.out.println("No products found in DB. Triggering synchronous ProductDataSeeder...");
+            productDataSeeder.seedAll();
+        }
 
         return productRepository.findAll()
                 .stream()
@@ -44,6 +47,9 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductDto getProductById(Integer productId) {
+        if (productRepository.count() == 0) {
+            productDataSeeder.seedAll();
+        }
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() ->
@@ -78,20 +84,11 @@ public class ProductServiceImpl implements ProductService {
 
         Product savedProduct = productRepository.save(product);
 
-        if (productDto.getImage() != null && !productDto.getImage().trim().isEmpty()) {
-            ProductImage productImage = new ProductImage();
-            productImage.setProduct(savedProduct);
-            productImage.setImageUrl(productDto.getImage());
-            productImageRepository.save(productImage);
-        }
-
         return mapToDto(savedProduct);
     }
 
     @Override
-    public ProductDto updateProduct(
-            Integer productId,
-            ProductDto productDto) {
+    public ProductDto updateProduct(Integer productId, ProductDto productDto) {
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() ->
@@ -105,7 +102,9 @@ public class ProductServiceImpl implements ProductService {
         if (productDto.getRating() != null) {
             product.setRating(productDto.getRating());
         }
-        product.setImage(productDto.getImage());
+        if (productDto.getImage() != null) {
+            product.setImage(productDto.getImage());
+        }
 
         if (productDto.getCategory() != null && productDto.getCategory().getCategoryId() != null) {
 
@@ -116,27 +115,9 @@ public class ProductServiceImpl implements ProductService {
                                     "Category not found"));
 
             product.setCategory(category);
-
-        } else {
-
-            product.setCategory(null);
         }
 
         Product updatedProduct = productRepository.save(product);
-
-        if (productDto.getImage() != null && !productDto.getImage().trim().isEmpty()) {
-            List<ProductImage> existingImages = productImageRepository.findByProduct_ProductId(productId);
-            if (!existingImages.isEmpty()) {
-                ProductImage img = existingImages.get(0);
-                img.setImageUrl(productDto.getImage());
-                productImageRepository.save(img);
-            } else {
-                ProductImage img = new ProductImage();
-                img.setProduct(updatedProduct);
-                img.setImageUrl(productDto.getImage());
-                productImageRepository.save(img);
-            }
-        }
 
         return mapToDto(updatedProduct);
     }
@@ -154,40 +135,24 @@ public class ProductServiceImpl implements ProductService {
 
     private ProductDto mapToDto(Product product) {
 
-        ProductDto productDto = new ProductDto();
+        ProductDto dto = new ProductDto();
 
-        productDto.setProductId(product.getProductId());
-        productDto.setName(product.getName());
-        productDto.setDescription(product.getDescription());
-        productDto.setPrice(product.getPrice());
-        productDto.setStock(product.getStock());
-        productDto.setImage(product.getImage());
-
-        // Get first image from productimages table if product.getImage() is empty
-        if (productDto.getImage() == null || productDto.getImage().trim().isEmpty()) {
-            List<ProductImage> images =
-                    productImageRepository.findByProduct_ProductId(product.getProductId());
-
-            if (!images.isEmpty()) {
-                productDto.setImage(images.get(0).getImageUrl());
-            }
-        }
-
-        productDto.setRating(product.getRating());
+        dto.setProductId(product.getProductId());
+        dto.setName(product.getName());
+        dto.setDescription(product.getDescription());
+        dto.setPrice(product.getPrice());
+        dto.setStock(product.getStock());
+        dto.setRating(product.getRating() != null ? product.getRating() : 4.8);
+        dto.setImage(product.getImage());
 
         if (product.getCategory() != null) {
-
             CategoryDto categoryDto = new CategoryDto();
-
             categoryDto.setCategoryId(product.getCategory().getCategoryId());
-            categoryDto.setName(product.getCategory().getName());
-
-            productDto.setCategory(categoryDto);
+            categoryDto.setName(product.getCategory().getName() != null ? product.getCategory().getName() : product.getCategory().getCategoryName());
+            categoryDto.setCategoryName(product.getCategory().getCategoryName() != null ? product.getCategory().getCategoryName() : product.getCategory().getName());
+            dto.setCategory(categoryDto);
         }
 
-        productDto.setCreatedAt(product.getCreatedAt());
-        productDto.setUpdatedAt(product.getUpdatedAt());
-
-        return productDto;
+        return dto;
     }
 }

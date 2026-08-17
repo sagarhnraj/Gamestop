@@ -7,24 +7,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.sg.gamestopbackend.entity.Category;
 import com.sg.gamestopbackend.entity.Product;
 import com.sg.gamestopbackend.entity.ProductImage;
+import com.sg.gamestopbackend.entity.User;
 import com.sg.gamestopbackend.repository.CategoryRepository;
 import com.sg.gamestopbackend.repository.ProductImageRepository;
 import com.sg.gamestopbackend.repository.ProductRepository;
-import java.util.concurrent.CompletableFuture;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-
-import org.springframework.transaction.support.TransactionTemplate;
-
-import com.sg.gamestopbackend.entity.User;
 import com.sg.gamestopbackend.repository.UserRepository;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Component
 public class ProductDataSeeder {
@@ -52,21 +48,23 @@ public class ProductDataSeeder {
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        CompletableFuture.runAsync(() -> {
-            try {
-                System.out.println("ProductDataSeeder background execution starting...");
-                transactionTemplate.executeWithoutResult(status -> {
-                    seedUsers();
-                    seedCategories();
-                    seedProductsAndImages();
-                    applyProductUpdates();
-                });
-                System.out.println("ProductDataSeeder background execution completed successfully!");
-            } catch (Exception e) {
-                System.err.println("ProductDataSeeder error: " + e.getMessage());
-                e.printStackTrace();
-            }
-        });
+        seedAll();
+    }
+
+    public synchronized void seedAll() {
+        try {
+            System.out.println("ProductDataSeeder execution starting...");
+            transactionTemplate.executeWithoutResult(status -> {
+                seedUsers();
+                seedCategories();
+                seedProductsAndImages();
+                applyProductUpdates();
+            });
+            System.out.println("ProductDataSeeder execution completed successfully!");
+        } catch (Exception e) {
+            System.err.println("ProductDataSeeder error: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void seedUsers() {
@@ -150,6 +148,8 @@ public class ProductDataSeeder {
                         p.setDescription(seed.description);
                         p.setPrice(BigDecimal.valueOf(seed.price));
                         p.setStock(10);
+                        p.setImage(seed.imageUrl);
+                        p.setRating(4.8);
                         p.setCategory(cat);
                         p.setCreatedAt(now);
                         p.setUpdatedAt(now);
@@ -165,6 +165,7 @@ public class ProductDataSeeder {
                         System.err.println("ProductDataSeeder product warning (" + seed.name + "): " + e.getMessage());
                     }
                 }
+                System.out.println("Seeded " + productRepository.count() + " products into database!");
             }
         } catch (Exception e) {
             System.err.println("ProductDataSeeder seedProductsAndImages warning: " + e.getMessage());
