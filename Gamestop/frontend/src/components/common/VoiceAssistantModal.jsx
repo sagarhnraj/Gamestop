@@ -131,7 +131,7 @@ function VoiceAssistantModal() {
           // Stop background wake listener
           stopActiveRecognition();
 
-          // TRIGGER CHATBOT POPUP AUTOMATICALLY
+          // POP UP CHATBOT MODAL IMMEDIATELY
           setIsOpen(true);
           stopSpeech();
 
@@ -320,7 +320,7 @@ function VoiceAssistantModal() {
     let rawText = promptToUse || queryText;
     if (!rawText || !rawText.trim()) return;
 
-    // Pop up Assistant Modal Panel immediately
+    // POP UP CHATBOT MODAL IMMEDIATELY WHEN QUERY PROCESSING STARTS
     setIsOpen(true);
     stopActiveRecognition();
     modeRef.current = "PROCESSING";
@@ -569,9 +569,16 @@ function VoiceAssistantModal() {
             )}
 
             {assistantState === "PROCESSING" && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 flex items-center gap-3">
-                <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm text-gray-300">Processing request against MySQL catalog...</span>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm font-semibold text-white">Processing Command...</span>
+                </div>
+                {lastQuery && (
+                  <div className="text-xs font-mono bg-zinc-950 p-2 rounded-lg border border-zinc-800 text-gray-300">
+                    <span className="text-red-400 font-bold">🗣️ Query:</span> "{lastQuery}"
+                  </div>
+                )}
               </div>
             )}
 
