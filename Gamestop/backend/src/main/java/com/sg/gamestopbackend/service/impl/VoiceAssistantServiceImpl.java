@@ -92,9 +92,16 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
         List<String> keywords = extractKeywords(lowerQuery);
         String primaryKeyword = keywords.isEmpty() ? null : keywords.get(0);
 
-        // 4. Intent Classification via Hugging Face API / Rule-based pattern matching
-        String hfIntent = classifyIntentWithHuggingFace(rawQuery, lowerQuery);
-        String intent = determineStrictIntent(lowerQuery, hfIntent);
+        // 4. Intent Classification: Fast-path local rule determination (sub-1ms response)
+        String intent = determineStrictIntent(lowerQuery, null);
+
+        // Only query Hugging Face if local intent is generic search and query is non-trivial
+        if ("PRODUCT_SEARCH".equals(intent) && rawQuery.length() > 20 && System.getenv("HF_TOKEN") != null) {
+            String hfIntent = classifyIntentWithHuggingFace(rawQuery, lowerQuery);
+            if (hfIntent != null && !"UNKNOWN".equals(hfIntent) && !"PRODUCT_SEARCH".equals(hfIntent)) {
+                intent = hfIntent;
+            }
+        }
 
         VoiceAssistantResponseDto response = new VoiceAssistantResponseDto(
                 intent,
@@ -413,7 +420,7 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
                     .header("Authorization", "Bearer " + hfToken)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .timeout(Duration.ofSeconds(5))
+                    .timeout(Duration.ofMillis(1500))
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
