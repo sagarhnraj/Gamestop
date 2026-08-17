@@ -20,7 +20,8 @@ function VoiceAssistantModal() {
   const [suggestions, setSuggestions] = useState([]);
   const [pendingConfirmation, setPendingConfirmation] = useState(null);
   const [actionLogs, setActionLogs] = useState([]);
-  const [isWakeWordActive, setIsWakeWordActive] = useState(false);
+  const [wakeStatus, setWakeStatus] = useState("Wake listener: STARTING...");
+  const [lastSpokenTranscript, setLastSpokenTranscript] = useState("");
 
   const { addToCart, removeFromCart, clearCart, loadCart } = useCart();
   const recognitionRef = useRef(null);
@@ -29,11 +30,13 @@ function VoiceAssistantModal() {
   const handleSendQueryRef = useRef(null);
   const lastAiProductRef = useRef(null);
   const recentSearchResultsRef = useRef([]);
+  const isProcessingRef = useRef(false);
+  const wakeTriggeredRef = useRef(false);
 
   // Helper to append a live action status log entry
   function addActionLog(msg) {
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setActionLogs((prev) => [...prev.slice(-5), { time: timeStr, msg }]);
+    setActionLogs((prev) => [...prev.slice(-6), { time: timeStr, msg }]);
   }
 
   // Helper function to stop text-to-speech
@@ -81,11 +84,10 @@ function VoiceAssistantModal() {
   useEffect(() => {
     if (!shouldRenderAI) {
       if (isOpen) setIsOpen(false);
-      if (isListening && recognitionRef.current) {
+      if (wakeWordRecognitionRef.current) {
         try {
-          recognitionRef.current.stop();
+          wakeWordRecognitionRef.current.stop();
         } catch (e) {}
-        setIsListening(false);
       }
       stopSpeech();
       setQueryText("");
@@ -109,48 +111,69 @@ function VoiceAssistantModal() {
     }
   }, [shouldRenderAI, isOpen]);
 
-  // Hands-Free "Hey GameStop" Wake Word Listener
+  // Unified Background SpeechRecognition Controller for "Hey GameStop" Wake Word
   useEffect(() => {
     if (!shouldRenderAI) return;
 
     const SpeechRecognition =
       typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      setWakeStatus("Speech recognition not supported in browser.");
+      return;
+    }
 
-    try {
-      const wakeRec = new SpeechRecognition();
-      wakeRec.continuous = true;
-      wakeRec.interimResults = true;
-      wakeRec.lang = "en-US";
+    let isComponentMounted = true;
 
-      wakeRec.onstart = () => {
-        setIsWakeWordActive(true);
-      };
+    function initWakeListener() {
+      if (!isComponentMounted || !shouldRenderAI) return;
 
-      wakeRec.onresult = (event) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript.toLowerCase();
+      try {
+        if (wakeWordRecognitionRef.current) {
+          try {
+            wakeWordRecognitionRef.current.stop();
+          } catch (e) {}
+        }
 
-          if (
-            transcript.includes("hey gamestop") ||
-            transcript.includes("hey game stop") ||
-            transcript.includes("hi gamestop") ||
-            transcript.includes("hello gamestop") ||
-            transcript.includes("ok gamestop")
-          ) {
-            // POPUP MODAL IMMEDIATELY!
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+
+        recognition.onstart = () => {
+          console.log("[WAKE] recognition started");
+          setWakeStatus("Wake listener: RUNNING");
+          setErrorMsg("");
+        };
+
+        recognition.onresult = (event) => {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            transcript += event.results[i][0].transcript;
+          }
+
+          if (!transcript || !transcript.trim()) return;
+
+          const lower = transcript.toLowerCase().trim();
+          console.log("[WAKE] recognition result:", lower);
+          setLastSpokenTranscript(`Speech detected: "${transcript.trim()}"`);
+
+          const isWake =
+            lower.includes("hey gamestop") ||
+            lower.includes("hey game stop") ||
+            lower.includes("hi gamestop") ||
+            lower.includes("hello gamestop") ||
+            lower.includes("ok gamestop");
+
+          if (isWake && !wakeTriggeredRef.current && !isProcessingRef.current) {
+            wakeTriggeredRef.current = true;
+            console.log("[WAKE] wake word detected");
+
+            // Open Modal Popup immediately!
             setIsOpen(true);
             stopSpeech();
 
-            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            setActionLogs([
-              { time: timeStr, msg: `🚀 WAKE WORD DETECTED: "Hey GameStop"` },
-              { time: timeStr, msg: `🎙️ Opening AI Assistant Popup Panel...` }
-            ]);
-
-            // Extract any follow-up command spoken after the wake word
-            const cleanQuery = transcript
+            const cleanCommand = lower
               .replace(/hey\s*game\s*stop/g, "")
               .replace(/hi\s*game\s*stop/g, "")
               .replace(/hello\s*game\s*stop/g, "")
@@ -158,61 +181,87 @@ function VoiceAssistantModal() {
               .replace(/gamestop/g, "")
               .trim();
 
-            if (cleanQuery.length > 2) {
+            const initialTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            if (cleanCommand.length > 2) {
+              setActionLogs([
+                { time: initialTime, msg: `WAKE WORD DETECTED: "Hey GameStop"` },
+                { time: initialTime, msg: `COMMAND CAPTURED: "${cleanCommand}"` }
+              ]);
+
               if (handleSendQueryRef.current) {
-                handleSendQueryRef.current(cleanQuery);
+                handleSendQueryRef.current(cleanCommand);
               }
             } else {
+              setActionLogs([
+                { time: initialTime, msg: `WAKE WORD DETECTED: "Hey GameStop"` },
+                { time: initialTime, msg: `LISTENING FOR COMMAND...` }
+              ]);
+
               speakText("GameStop AI active! What command can I perform for you?");
               setTimeout(() => {
-                if (recognitionRef.current) {
-                  try {
-                    recognitionRef.current.start();
-                  } catch (e) {}
-                }
-              }, 1200);
+                wakeTriggeredRef.current = false;
+                startCommandListening();
+              }, 1000);
             }
-            break;
           }
+        };
+
+        recognition.onerror = (event) => {
+          console.warn("Speech recognition error:", event.error);
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            setWakeStatus("Microphone permission required for Hey GameStop.");
+          }
+        };
+
+        recognition.onend = () => {
+          console.log("[WAKE] recognition ended");
+          if (isComponentMounted && shouldRenderAI && !isProcessingRef.current) {
+            console.log("[WAKE] restarting recognition");
+            setTimeout(() => {
+              if (isComponentMounted && shouldRenderAI) {
+                initWakeListener();
+              }
+            }, 300);
+          }
+        };
+
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn("[WAKE] start failed:", e);
         }
-      };
 
-      wakeRec.onerror = () => {
-        setIsWakeWordActive(false);
-      };
-
-      wakeRec.onend = () => {
-        if (shouldRenderAI && !isListening) {
-          try {
-            wakeRec.start();
-          } catch (e) {}
-        }
-      };
-
-      try {
-        wakeRec.start();
-      } catch (e) {}
-
-      wakeWordRecognitionRef.current = wakeRec;
-    } catch (e) {
-      console.warn("Wake word listener initialization error:", e);
+        wakeWordRecognitionRef.current = recognition;
+      } catch (e) {
+        console.warn("[WAKE] init error:", e);
+      }
     }
 
+    initWakeListener();
+
     return () => {
+      isComponentMounted = false;
       if (wakeWordRecognitionRef.current) {
         try {
           wakeWordRecognitionRef.current.stop();
         } catch (e) {}
       }
     };
-  }, [shouldRenderAI, isListening]);
+  }, [shouldRenderAI]);
 
-  useEffect(() => {
-    if (!shouldRenderAI) return;
-
-    // Initialize Browser SpeechRecognition if supported
+  // Start active command microphone inside modal
+  const startCommandListening = () => {
     const SpeechRecognition = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (SpeechRecognition) {
+    if (!SpeechRecognition) return;
+
+    try {
+      if (wakeWordRecognitionRef.current) {
+        try {
+          wakeWordRecognitionRef.current.stop();
+        } catch (e) {}
+      }
+
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = true;
@@ -220,6 +269,7 @@ function VoiceAssistantModal() {
 
       recognition.onstart = () => {
         setIsListening(true);
+        setWakeStatus("Listening for command...");
         setErrorMsg("");
         latestVoiceTranscriptRef.current = "";
       };
@@ -231,18 +281,13 @@ function VoiceAssistantModal() {
         }
         setQueryText(transcript);
         latestVoiceTranscriptRef.current = transcript.trim();
+        setLastSpokenTranscript(`Speech detected: "${transcript.trim()}"`);
       };
 
       recognition.onerror = (event) => {
-        console.warn("Speech recognition error:", event.error);
         setIsListening(false);
-        latestVoiceTranscriptRef.current = "";
         if (event.error === "not-allowed") {
           setErrorMsg("Microphone permission denied. Please allow microphone access or type your query.");
-        } else if (event.error === "no-speech") {
-          setErrorMsg("No speech detected. Please try speaking again.");
-        } else {
-          setErrorMsg(`Voice error: ${event.error}. You can type your request below.`);
         }
       };
 
@@ -254,44 +299,29 @@ function VoiceAssistantModal() {
           if (handleSendQueryRef.current) {
             handleSendQueryRef.current(voiceText);
           }
+        } else {
+          setWakeStatus("Wake listener: RUNNING");
         }
       };
 
+      recognition.start();
       recognitionRef.current = recognition;
+    } catch (e) {
+      console.warn("Start command listening error:", e);
     }
-  }, [shouldRenderAI]);
-
-  // Stop Speech Synthesis when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      stopSpeech();
-    }
-  }, [isOpen]);
-
-  // CRITICAL REQUIREMENT: Do NOT render anything if user is NOT logged in or on public auth/admin pages
-  if (!shouldRenderAI) {
-    return null;
-  }
+  };
 
   const toggleListening = () => {
-    if (!recognitionRef.current) {
-      setErrorMsg("Voice input is not supported in this browser. You can type your request below.");
-      return;
-    }
-
     if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      stopSpeech();
-      setErrorMsg("");
-      setQueryText("");
-      latestVoiceTranscriptRef.current = "";
-      try {
-        recognitionRef.current.start();
-      } catch (err) {
-        console.warn("Start recognition error:", err);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
       }
+      setIsListening(false);
+      setWakeStatus("Wake listener: RUNNING");
+    } else {
+      startCommandListening();
     }
   };
 
@@ -299,15 +329,10 @@ function VoiceAssistantModal() {
     let rawText = promptToUse || queryText;
     if (!rawText || !rawText.trim()) return;
 
-    // Pop up Assistant Modal Panel immediately!
     setIsOpen(true);
+    isProcessingRef.current = true;
+    setWakeStatus("Processing request...");
 
-    const isWakeTrigger = promptToUse && (
-      promptToUse.toLowerCase().includes("hey gamestop") ||
-      promptToUse.toLowerCase().includes("hey game stop")
-    );
-
-    // Clean wake-word prefixes if user spoke "Hey GameStop ..."
     const textToSend = rawText
       .replace(/^hey\s*game\s*stop\s*/i, "")
       .replace(/^hi\s*game\s*stop\s*/i, "")
@@ -315,9 +340,12 @@ function VoiceAssistantModal() {
       .replace(/^ok\s*game\s*stop\s*/i, "")
       .trim();
 
-    if (!textToSend) return;
+    if (!textToSend) {
+      isProcessingRef.current = false;
+      wakeTriggeredRef.current = false;
+      return;
+    }
 
-    // Clear input box and voice ref after message is sent
     setQueryText("");
     latestVoiceTranscriptRef.current = "";
 
@@ -333,13 +361,6 @@ function VoiceAssistantModal() {
     setErrorMsg("");
     setLastQuery(textToSend);
     setPendingConfirmation(null);
-
-    const initialTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setActionLogs([
-      { time: initialTime, msg: isWakeTrigger ? `🚀 Wake Word Detected: "Hey GameStop"` : `🗣️ Command Received: "${textToSend}"` },
-      { time: initialTime, msg: `⚙️ Parsing Intent: "${textToSend}"` },
-      { time: initialTime, msg: `🔍 Querying Spring Boot AI & MySQL Database...` }
-    ]);
 
     const lowerQuery = textToSend.toLowerCase();
     const isTopReq =
@@ -361,6 +382,9 @@ function VoiceAssistantModal() {
       ? lastAiProductRef.current.productId || lastAiProductRef.current.id
       : null;
 
+    // Real Action Monitor Progress Logging (Requirement 8)
+    addActionLog("SEARCHING GAMESTOP CATALOG...");
+
     try {
       const response = await processVoiceQuery(textToSend, {
         currentPage: currentPath,
@@ -370,14 +394,11 @@ function VoiceAssistantModal() {
 
       setIsThinking(false);
 
-      // Persist the MOST RECENT completed AI search results
       if (response && response.products && response.products.length > 0) {
         recentSearchResultsRef.current = response.products;
         lastAiProductRef.current = response.products[0];
-        addActionLog(`📦 Search complete: ${response.products.length} products found in MySQL catalog.`);
       }
 
-      // Execute Whitelisted Ecommerce Actions locally using existing GameStop Cart & Route logic
       if (response) {
         const isActionTop = response.action === "ADD_TOP_PRODUCT" || isTopReq;
 
@@ -400,16 +421,16 @@ function VoiceAssistantModal() {
             const qty = response.quantity || 1;
             const pId = targetProd.productId || targetProd.id;
 
-            addActionLog(`⚡ Executing Action: ${isActionTop ? 'ADD_TOP_PRODUCT' : 'ADD_TO_CART'} for "${targetProd.name}" (ID: ${pId})`);
+            addActionLog(`PRODUCT IDENTIFIED: ${targetProd.name} (productId: ${pId})`);
+            addActionLog("EXECUTING CART ACTION...");
 
             try {
               await addToCart(targetProd);
               if (qty > 1 && pId) {
                 await updateQuantity(pId, qty);
               }
-              addActionLog(`🛒 Cart Updated: Added ${qty} unit(s) of "${targetProd.name}".`);
               await loadCart();
-              addActionLog(`🔄 CartContext Refreshed & Navbar Badge Updated!`);
+              addActionLog("CART UPDATED SUCCESSFULLY");
 
               const confirmText =
                 qty > 1
@@ -421,50 +442,41 @@ function VoiceAssistantModal() {
               response.resolvedProduct = targetProd;
               setAiResponse(response);
               speakText(confirmText);
-              addActionLog(`✅ Command Finished Successfully!`);
             } catch (err) {
               console.error("Cart action error:", err);
               const errText = `Failed to add ${targetProd.name} to cart. Please verify your login session.`;
               response.textResponse = errText;
               setAiResponse(response);
               setErrorMsg(errText);
-              addActionLog(`❌ Action Failed: Cart request returned error.`);
+              addActionLog(`ACTION FAILED: ${err.message || 'Cart request failed'}`);
             }
-            return;
           } else if (isActionTop) {
             const errText = "No recent AI search results found. Please search for products first.";
             response.textResponse = errText;
             setAiResponse(response);
             setErrorMsg(errText);
-            addActionLog(`⚠️ Warning: No recent AI search results available.`);
-            return;
+            addActionLog("ACTION FAILED: No recent search results");
           }
         } else if (response.action === "REMOVE_FROM_CART" && response.resolvedProduct) {
           const pId = response.resolvedProduct.productId || response.resolvedProduct.id;
           if (pId) {
-            addActionLog(`⚡ Action Executing: REMOVE_FROM_CART for "${response.resolvedProduct.name}"`);
+            addActionLog(`EXECUTING CART ACTION: Remove item ${pId}`);
             await removeFromCart(pId);
             await loadCart();
-            addActionLog(`🛒 Cart Updated: Removed item successfully.`);
+            addActionLog("CART UPDATED SUCCESSFULLY");
           }
         } else if (response.action === "EMPTY_CART" && response.requiresConfirmation) {
-          addActionLog(`⚠️ Confirmation Required: Empty Cart requested.`);
           setPendingConfirmation("EMPTY_CART");
-        } else {
-          addActionLog(`ℹ️ Response Received: ${response.action || 'SEARCH_RESULT'}`);
         }
 
         setAiResponse(response);
 
-        // Handle navigation if requested (e.g. /checkout, /orders, /cart)
         if (response.targetRoute && response.action !== "EMPTY_CART") {
-          addActionLog(`🔀 Navigating to route: ${response.targetRoute}`);
           setTimeout(() => {
             navigate(response.targetRoute);
           }, 800);
         }
 
-        // Trigger Text-to-Speech audio response
         if (response.textResponse) {
           speakText(response.textResponse);
         }
@@ -473,28 +485,30 @@ function VoiceAssistantModal() {
       console.error("Voice Query Processing Error:", err);
       setIsThinking(false);
       setErrorMsg("Failed to connect to GameStop AI backend. Please check your server connection.");
-      addActionLog(`❌ Error: Backend API connection failed.`);
+      addActionLog(`ACTION FAILED: ${err.message || 'API Connection Failed'}`);
+    } finally {
+      isProcessingRef.current = false;
+      wakeTriggeredRef.current = false;
+      setWakeStatus("Wake listener: RUNNING");
     }
   };
 
-  // Assign latest handleSendQuery function to ref to prevent stale closures in speech recognition callback
   handleSendQueryRef.current = handleSendQuery;
 
   const handleConfirmAction = async () => {
     if (pendingConfirmation === "EMPTY_CART") {
-      addActionLog(`⚡ Executing: EMPTY_CART action confirmed by user.`);
+      addActionLog("EXECUTING CART ACTION: Clear Cart");
       await clearCart();
       await loadCart();
       setPendingConfirmation(null);
       speakText("Your cart is now completely empty.");
-      addActionLog(`🛒 Cart Cleared successfully.`);
+      addActionLog("CART UPDATED SUCCESSFULLY");
     }
   };
 
   const handleCancelAction = () => {
     setPendingConfirmation(null);
     speakText("Action cancelled.");
-    addActionLog(`ℹ️ Action cancelled by user.`);
   };
 
   const handleQuickPrompt = (prompt) => {
@@ -532,16 +546,12 @@ function VoiceAssistantModal() {
                 <FaRobot className="text-red-500 text-xl" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-base flex items-center gap-2">
-                  GameStop AI Voice Assistant
-                  {isWakeWordActive && (
-                    <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                      Wake Word Active
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-gray-400">Say "Hey GameStop" • Natural Voice & Command Tracker</p>
+                <h3 className="font-bold text-white text-base">GameStop AI Voice Assistant</h3>
+                {/* Visible Real Recognition State Bar (Requirement 11) */}
+                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 mt-0.5">
+                  <span className={`w-2 h-2 rounded-full ${wakeStatus.includes("RUNNING") ? "bg-green-500 animate-pulse" : "bg-red-500"}`}></span>
+                  <span>{wakeStatus}</span>
+                </div>
               </div>
             </div>
             <button
@@ -562,9 +572,9 @@ function VoiceAssistantModal() {
                     <FaTerminal className="text-xs" />
                     Live Command & Action Monitor
                   </span>
-                  <span className="text-[10px] text-gray-500">Real-Time Log Stream</span>
+                  <span className="text-[10px] text-gray-500">Real Execution Stream</span>
                 </div>
-                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
                   {actionLogs.map((log, idx) => (
                     <div key={idx} className="flex items-start gap-2 text-gray-300">
                       <span className="text-gray-500 text-[10px] select-none">[{log.time}]</span>
