@@ -1,12 +1,21 @@
 import API_BASE_URL from "./api";
 
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (token && token !== "null" && token !== "undefined") {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
 export const processVoiceQuery = async (queryText) => {
   try {
     const response = await fetch(`${API_BASE_URL}/voice/assistant`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ query: queryText }),
     });
 
@@ -25,9 +34,7 @@ export const getVoiceSuggestions = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/voice/suggestions`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {

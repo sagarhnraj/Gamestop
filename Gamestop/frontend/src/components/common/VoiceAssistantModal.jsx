@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar } from "react-icons/fa";
 import { processVoiceQuery, getVoiceSuggestions } from "../../services/voiceService";
 import { useCart } from "../../context/CartContext";
 
 function VoiceAssistantModal() {
+  const location = useLocation();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
@@ -18,9 +20,36 @@ function VoiceAssistantModal() {
   const { addToCart } = useCart();
   const recognitionRef = useRef(null);
 
+  // 1. Determine if user is authenticated (using existing GameStop auth source of truth)
+  const token = localStorage.getItem("token");
+  const isLoggedIn = Boolean(token && token !== "null" && token !== "undefined");
+
+  // 2. Check if current route is a public auth page or admin page
+  const isExcludedRoute =
+    ["/login", "/register", "/forgot-password", "/reset-password"].includes(location.pathname) ||
+    location.pathname.startsWith("/admin");
+
+  const shouldRenderAI = isLoggedIn && !isExcludedRoute;
+
+  // Cleanup & stop all AI activity if user logs out or navigates to excluded route
+  useEffect(() => {
+    if (!shouldRenderAI) {
+      if (isOpen) setIsOpen(false);
+      if (isListening && recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+        setIsListening(false);
+      }
+      stopSpeech();
+      setQueryText("");
+      setAiResponse(null);
+    }
+  }, [shouldRenderAI, location.pathname]);
+
   // Fetch verified dynamic suggestions from MySQL database when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (shouldRenderAI && isOpen) {
       getVoiceSuggestions()
         .then((data) => {
           if (Array.isArray(data) && data.length > 0) {
@@ -29,9 +58,11 @@ function VoiceAssistantModal() {
         })
         .catch((err) => console.error("Error loading voice suggestions:", err));
     }
-  }, [isOpen]);
+  }, [shouldRenderAI, isOpen]);
 
   useEffect(() => {
+    if (!shouldRenderAI) return;
+
     // Initialize Browser SpeechRecognition if supported
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -71,7 +102,7 @@ function VoiceAssistantModal() {
 
       recognitionRef.current = recognition;
     }
-  }, []);
+  }, [shouldRenderAI]);
 
   // Stop Speech Synthesis when modal closes
   useEffect(() => {
@@ -79,6 +110,11 @@ function VoiceAssistantModal() {
       stopSpeech();
     }
   }, [isOpen]);
+
+  // CRITICAL REQUIREMENT: Do NOT render anything if user is NOT logged in or on public auth/admin pages
+  if (!shouldRenderAI) {
+    return null;
+  }
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
