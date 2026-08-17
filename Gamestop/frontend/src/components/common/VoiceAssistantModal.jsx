@@ -85,7 +85,7 @@ function VoiceAssistantModal() {
     }
   }
 
-  // Background Wake-Word Recognition Controller ("Hey GameStop")
+  // Background Wake-Word Recognition Controller ("Hey GameStop") on Home Page & All Webpages
   function startWakeListening() {
     if (!shouldRenderAI) return;
 
@@ -105,7 +105,7 @@ function VoiceAssistantModal() {
       recognition.lang = "en-US";
 
       recognition.onstart = () => {
-        console.log("[WAKE] recognition started");
+        console.log("[WAKE] Background wake-word listener started on " + (currentPath || "page"));
       };
 
       recognition.onresult = (event) => {
@@ -116,7 +116,7 @@ function VoiceAssistantModal() {
 
         if (!transcript || !transcript.trim()) return;
         const lower = transcript.toLowerCase().trim();
-        console.log("[WAKE] recognition result:", lower);
+        console.log("[WAKE] Speech detected on " + currentPath + ":", lower);
 
         const isWake =
           lower.includes("hey gamestop") ||
@@ -126,12 +126,12 @@ function VoiceAssistantModal() {
           lower.includes("ok gamestop");
 
         if (isWake && modeRef.current === "WAKE_LISTENING") {
-          console.log("[WAKE] wake word detected");
+          console.log("[WAKE] 'Hey GameStop' wake word detected! Opening chatbot modal...");
 
           // Stop background wake listener
           stopActiveRecognition();
 
-          // POPUP OPENS AUTOMATICALLY
+          // TRIGGER CHATBOT POPUP AUTOMATICALLY
           setIsOpen(true);
           stopSpeech();
 
@@ -150,7 +150,7 @@ function VoiceAssistantModal() {
               handleSendQueryRef.current(cleanCommand);
             }
           } else {
-            // WAKE WORD ONLY -> START 5-SECOND AUTOMATIC COMMAND LISTENING WINDOW
+            // WAKE WORD ONLY -> START AUTOMATIC COMMAND LISTENING WINDOW
             startCommandListening(true);
           }
         }
@@ -161,9 +161,8 @@ function VoiceAssistantModal() {
       };
 
       recognition.onend = () => {
-        console.log("[WAKE] recognition ended");
+        console.log("[WAKE] background listener ended");
         if (modeRef.current === "WAKE_LISTENING" && shouldRenderAI) {
-          console.log("[WAKE] restarting recognition");
           setTimeout(() => {
             if (modeRef.current === "WAKE_LISTENING" && shouldRenderAI) {
               startWakeListening();
@@ -203,7 +202,7 @@ function VoiceAssistantModal() {
       recognition.lang = "en-US";
 
       recognition.onstart = () => {
-        console.log("[COMMAND] listening started (auto = " + isAutoFromWake + ")");
+        console.log("[COMMAND] Command microphone listening started...");
       };
 
       recognition.onresult = (event) => {
@@ -236,7 +235,6 @@ function VoiceAssistantModal() {
             handleSendQueryRef.current(captured);
           }
         } else {
-          // If no speech was captured, return to READY / WAKE_LISTENING (popup stays open!)
           startWakeListening();
         }
       };
@@ -244,7 +242,7 @@ function VoiceAssistantModal() {
       recognition.start();
       activeRecognitionRef.current = recognition;
 
-      // REQUIREMENT 2: 5-Second Command Window for automatic wake-word activation ONLY
+      // 5-Second Command Window for automatic wake-word activation ONLY
       if (isAutoFromWake) {
         commandTimerRef.current = setTimeout(() => {
           console.log("[COMMAND] 5-second wake-word window expired");
@@ -260,20 +258,27 @@ function VoiceAssistantModal() {
     }
   }
 
-  // Initialize background wake word listener when component mounts or auth route changes
+  // Initialize background wake word listener when component mounts or route changes
   useEffect(() => {
     if (shouldRenderAI) {
       startWakeListening();
+
+      // Enable microphone on first click anywhere on webpage for seamless browser support
+      const enableMicOnFirstInteraction = () => {
+        if (modeRef.current === "IDLE" || modeRef.current === "WAKE_LISTENING") {
+          startWakeListening();
+        }
+      };
+
+      window.addEventListener("click", enableMicOnFirstInteraction, { once: true });
+      return () => {
+        window.removeEventListener("click", enableMicOnFirstInteraction);
+      };
     } else {
       stopActiveRecognition();
       modeRef.current = "IDLE";
     }
-
-    return () => {
-      stopActiveRecognition();
-      modeRef.current = "IDLE";
-    };
-  }, [shouldRenderAI]);
+  }, [shouldRenderAI, currentPath]);
 
   // Fetch verified dynamic suggestions from MySQL database when modal opens
   useEffect(() => {
@@ -300,14 +305,14 @@ function VoiceAssistantModal() {
     return null;
   }
 
-  // Manual Microphone Button Click Handler (OPTION A - No 5s timeout limit)
+  // Manual Microphone Button Click Handler (No 5s timeout limit)
   const toggleListening = () => {
     if (assistantState === "LISTENING") {
       stopActiveRecognition();
       startWakeListening();
     } else {
       stopSpeech();
-      startCommandListening(false); // Manual click does NOT have 5s limit
+      startCommandListening(false);
     }
   };
 
@@ -482,7 +487,10 @@ function VoiceAssistantModal() {
       {/* Floating Trigger Button Pinned to Bottom-Right */}
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true);
+            startCommandListening(false);
+          }}
           className="fixed bottom-6 right-6 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold px-5 py-3.5 rounded-full shadow-2xl flex items-center gap-3 transition-all duration-300 transform hover:scale-105 z-50 border border-red-400/30"
           title="Ask GameStop AI Voice Assistant (Say 'Hey GameStop')"
         >
@@ -508,7 +516,7 @@ function VoiceAssistantModal() {
               </div>
               <div>
                 <h3 className="font-bold text-white text-base">GameStop AI Voice Assistant</h3>
-                {/* REQUIREMENT 9: Simple Clean Real-Time Status Indicator */}
+                {/* Clean Real-Time Status Indicator */}
                 <div className="flex items-center gap-2 mt-0.5">
                   {assistantState === "LISTENING" && (
                     <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 animate-pulse">
@@ -549,7 +557,7 @@ function VoiceAssistantModal() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                   </span>
-                  <span className="text-sm font-medium text-red-300">Listening... Speak now</span>
+                  <span className="text-sm font-medium text-red-300">Listening... Speak command now</span>
                 </div>
                 <button
                   onClick={toggleListening}
