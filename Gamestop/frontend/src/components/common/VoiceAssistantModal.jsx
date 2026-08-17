@@ -11,6 +11,7 @@ function VoiceAssistantModal() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [assistantState, setAssistantState] = useState("READY"); // "READY" | "LISTENING" | "PROCESSING"
+  const [isMuted, setIsMuted] = useState(true); // Voice talking back is MUTED BY DEFAULT per user request
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [queryText, setQueryText] = useState("");
   const [lastQuery, setLastQuery] = useState("");
@@ -38,10 +39,14 @@ function VoiceAssistantModal() {
     setIsSpeaking(false);
   }
 
-  // Helper function to play text-to-speech
-  function speakText(text) {
+  // Helper function to play text-to-speech (Obeys isMuted unless forcePlay is true)
+  function speakText(text, forcePlay = false) {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     stopSpeech();
+    
+    // Only talk back if unmuted or explicitly selected by user to talk
+    if (isMuted && !forcePlay) return;
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
@@ -417,7 +422,7 @@ function VoiceAssistantModal() {
               response.action = isActionTop ? "ADD_TOP_PRODUCT" : "ADD_TO_CART";
               response.resolvedProduct = targetProd;
               setAiResponse(response);
-              speakText(confirmText);
+              speakText(confirmText); // Silent by default, speaks only if unmuted!
             } catch (err) {
               console.error("Cart action error:", err);
               const errText = `Failed to add ${targetProd.name} to cart. Please verify your login session.`;
@@ -450,7 +455,7 @@ function VoiceAssistantModal() {
         }
 
         if (response.textResponse) {
-          speakText(response.textResponse);
+          speakText(response.textResponse); // Silent by default, speaks only if unmuted!
         }
       }
     } catch (err) {
@@ -468,13 +473,13 @@ function VoiceAssistantModal() {
       await clearCart();
       await loadCart();
       setPendingConfirmation(null);
-      speakText("Your cart is now completely empty.");
+      speakText("Your cart is now completely empty."); // Silent by default, speaks only if unmuted!
     }
   };
 
   const handleCancelAction = () => {
     setPendingConfirmation(null);
-    speakText("Action cancelled.");
+    speakText("Action cancelled."); // Silent by default, speaks only if unmuted!
   };
 
   const handleQuickPrompt = (prompt) => {
@@ -539,12 +544,39 @@ function VoiceAssistantModal() {
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-zinc-800 transition"
-            >
-              <FaTimes />
-            </button>
+
+            {/* Mute/Unmute Toggle & Close Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (!isMuted) {
+                    stopSpeech();
+                    setIsMuted(true);
+                  } else {
+                    setIsMuted(false);
+                    if (aiResponse && aiResponse.textResponse) {
+                      speakText(aiResponse.textResponse, true);
+                    }
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border ${
+                  isMuted
+                    ? "bg-zinc-800 text-gray-400 border-zinc-700 hover:text-white"
+                    : "bg-red-600/20 text-red-400 border-red-500/40 animate-pulse"
+                }`}
+                title={isMuted ? "Click to Unmute AI Voice" : "Click to Mute AI Voice"}
+              >
+                {isMuted ? <FaVolumeMute className="text-xs" /> : <FaVolumeUp className="text-xs text-red-500" />}
+                <span>{isMuted ? "Muted" : "Voice On"}</span>
+              </button>
+
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-gray-400 hover:text-white p-2 rounded-full hover:bg-zinc-800 transition"
+              >
+                <FaTimes />
+              </button>
+            </div>
           </div>
 
           {/* Body Content */}
@@ -690,10 +722,11 @@ function VoiceAssistantModal() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => speakText(aiResponse.textResponse)}
+                      onClick={() => speakText(aiResponse.textResponse, true)}
                       className="text-xs bg-zinc-800 text-gray-300 hover:text-white px-2.5 py-1 rounded-md flex items-center gap-1.5"
+                      title="Click to Hear Voice Response Out Loud"
                     >
-                      <FaVolumeUp /> Replay Voice
+                      <FaVolumeUp /> Play Voice
                     </button>
                   )}
                 </div>
