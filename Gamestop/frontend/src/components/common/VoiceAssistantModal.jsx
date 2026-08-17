@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar, FaExclamationTriangle } from "react-icons/fa";
+import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar, FaExclamationTriangle, FaTerminal } from "react-icons/fa";
 import { processVoiceQuery, getVoiceSuggestions } from "../../services/voiceService";
 import { updateQuantity } from "../../services/cartService";
 import { useCart } from "../../context/CartContext";
@@ -19,6 +19,8 @@ function VoiceAssistantModal() {
   const [errorMsg, setErrorMsg] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [pendingConfirmation, setPendingConfirmation] = useState(null);
+  const [actionLogs, setActionLogs] = useState([]);
+  const [isWakeWordActive, setIsWakeWordActive] = useState(false);
 
   const { addToCart, removeFromCart, clearCart, loadCart } = useCart();
   const recognitionRef = useRef(null);
@@ -27,6 +29,12 @@ function VoiceAssistantModal() {
   const handleSendQueryRef = useRef(null);
   const lastAiProductRef = useRef(null);
   const recentSearchResultsRef = useRef([]);
+
+  // Helper to append a live action status log entry
+  function addActionLog(msg) {
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setActionLogs((prev) => [...prev.slice(-5), { time: timeStr, msg }]);
+  }
 
   // Helper function to stop text-to-speech
   function stopSpeech() {
@@ -83,6 +91,7 @@ function VoiceAssistantModal() {
       setQueryText("");
       setAiResponse(null);
       setPendingConfirmation(null);
+      setActionLogs([]);
       latestVoiceTranscriptRef.current = "";
     }
   }, [shouldRenderAI, currentPath]);
@@ -100,7 +109,7 @@ function VoiceAssistantModal() {
     }
   }, [shouldRenderAI, isOpen]);
 
-  // Hands-Free "Hey GameStop" Wake Word Activation Listener
+  // Hands-Free "Hey GameStop" Wake Word Listener
   useEffect(() => {
     if (!shouldRenderAI) return;
 
@@ -115,6 +124,10 @@ function VoiceAssistantModal() {
       wakeRec.interimResults = true;
       wakeRec.lang = "en-US";
 
+      wakeRec.onstart = () => {
+        setIsWakeWordActive(true);
+      };
+
       wakeRec.onresult = (event) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript.toLowerCase();
@@ -126,8 +139,15 @@ function VoiceAssistantModal() {
             transcript.includes("hello gamestop") ||
             transcript.includes("ok gamestop")
           ) {
+            // POPUP MODAL IMMEDIATELY!
             setIsOpen(true);
             stopSpeech();
+
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setActionLogs([
+              { time: timeStr, msg: `🚀 WAKE WORD DETECTED: "Hey GameStop"` },
+              { time: timeStr, msg: `🎙️ Opening AI Assistant Popup Panel...` }
+            ]);
 
             // Extract any follow-up command spoken after the wake word
             const cleanQuery = transcript
@@ -143,7 +163,7 @@ function VoiceAssistantModal() {
                 handleSendQueryRef.current(cleanQuery);
               }
             } else {
-              speakText("GameStop AI active! How can I help you?");
+              speakText("GameStop AI active! What command can I perform for you?");
               setTimeout(() => {
                 if (recognitionRef.current) {
                   try {
@@ -158,7 +178,7 @@ function VoiceAssistantModal() {
       };
 
       wakeRec.onerror = () => {
-        // Silently ignore background wake word listener errors
+        setIsWakeWordActive(false);
       };
 
       wakeRec.onend = () => {
@@ -279,6 +299,14 @@ function VoiceAssistantModal() {
     let rawText = promptToUse || queryText;
     if (!rawText || !rawText.trim()) return;
 
+    // Pop up Assistant Modal Panel immediately!
+    setIsOpen(true);
+
+    const isWakeTrigger = promptToUse && (
+      promptToUse.toLowerCase().includes("hey gamestop") ||
+      promptToUse.toLowerCase().includes("hey game stop")
+    );
+
     // Clean wake-word prefixes if user spoke "Hey GameStop ..."
     const textToSend = rawText
       .replace(/^hey\s*game\s*stop\s*/i, "")
@@ -305,6 +333,13 @@ function VoiceAssistantModal() {
     setErrorMsg("");
     setLastQuery(textToSend);
     setPendingConfirmation(null);
+
+    const initialTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setActionLogs([
+      { time: initialTime, msg: isWakeTrigger ? `🚀 Wake Word Detected: "Hey GameStop"` : `🗣️ Command Received: "${textToSend}"` },
+      { time: initialTime, msg: `⚙️ Parsing Intent: "${textToSend}"` },
+      { time: initialTime, msg: `🔍 Querying Spring Boot AI & MySQL Database...` }
+    ]);
 
     const lowerQuery = textToSend.toLowerCase();
     const isTopReq =
@@ -339,6 +374,7 @@ function VoiceAssistantModal() {
       if (response && response.products && response.products.length > 0) {
         recentSearchResultsRef.current = response.products;
         lastAiProductRef.current = response.products[0];
+        addActionLog(`📦 Search complete: ${response.products.length} products found in MySQL catalog.`);
       }
 
       // Execute Whitelisted Ecommerce Actions locally using existing GameStop Cart & Route logic
@@ -364,12 +400,16 @@ function VoiceAssistantModal() {
             const qty = response.quantity || 1;
             const pId = targetProd.productId || targetProd.id;
 
+            addActionLog(`⚡ Executing Action: ${isActionTop ? 'ADD_TOP_PRODUCT' : 'ADD_TO_CART'} for "${targetProd.name}" (ID: ${pId})`);
+
             try {
               await addToCart(targetProd);
               if (qty > 1 && pId) {
                 await updateQuantity(pId, qty);
               }
+              addActionLog(`🛒 Cart Updated: Added ${qty} unit(s) of "${targetProd.name}".`);
               await loadCart();
+              addActionLog(`🔄 CartContext Refreshed & Navbar Badge Updated!`);
 
               const confirmText =
                 qty > 1
@@ -381,12 +421,14 @@ function VoiceAssistantModal() {
               response.resolvedProduct = targetProd;
               setAiResponse(response);
               speakText(confirmText);
+              addActionLog(`✅ Command Finished Successfully!`);
             } catch (err) {
               console.error("Cart action error:", err);
               const errText = `Failed to add ${targetProd.name} to cart. Please verify your login session.`;
               response.textResponse = errText;
               setAiResponse(response);
               setErrorMsg(errText);
+              addActionLog(`❌ Action Failed: Cart request returned error.`);
             }
             return;
           } else if (isActionTop) {
@@ -394,22 +436,29 @@ function VoiceAssistantModal() {
             response.textResponse = errText;
             setAiResponse(response);
             setErrorMsg(errText);
+            addActionLog(`⚠️ Warning: No recent AI search results available.`);
             return;
           }
         } else if (response.action === "REMOVE_FROM_CART" && response.resolvedProduct) {
           const pId = response.resolvedProduct.productId || response.resolvedProduct.id;
           if (pId) {
+            addActionLog(`⚡ Action Executing: REMOVE_FROM_CART for "${response.resolvedProduct.name}"`);
             await removeFromCart(pId);
             await loadCart();
+            addActionLog(`🛒 Cart Updated: Removed item successfully.`);
           }
         } else if (response.action === "EMPTY_CART" && response.requiresConfirmation) {
+          addActionLog(`⚠️ Confirmation Required: Empty Cart requested.`);
           setPendingConfirmation("EMPTY_CART");
+        } else {
+          addActionLog(`ℹ️ Response Received: ${response.action || 'SEARCH_RESULT'}`);
         }
 
         setAiResponse(response);
 
         // Handle navigation if requested (e.g. /checkout, /orders, /cart)
         if (response.targetRoute && response.action !== "EMPTY_CART") {
+          addActionLog(`🔀 Navigating to route: ${response.targetRoute}`);
           setTimeout(() => {
             navigate(response.targetRoute);
           }, 800);
@@ -424,6 +473,7 @@ function VoiceAssistantModal() {
       console.error("Voice Query Processing Error:", err);
       setIsThinking(false);
       setErrorMsg("Failed to connect to GameStop AI backend. Please check your server connection.");
+      addActionLog(`❌ Error: Backend API connection failed.`);
     }
   };
 
@@ -432,16 +482,19 @@ function VoiceAssistantModal() {
 
   const handleConfirmAction = async () => {
     if (pendingConfirmation === "EMPTY_CART") {
+      addActionLog(`⚡ Executing: EMPTY_CART action confirmed by user.`);
       await clearCart();
       await loadCart();
       setPendingConfirmation(null);
       speakText("Your cart is now completely empty.");
+      addActionLog(`🛒 Cart Cleared successfully.`);
     }
   };
 
   const handleCancelAction = () => {
     setPendingConfirmation(null);
     speakText("Action cancelled.");
+    addActionLog(`ℹ️ Action cancelled by user.`);
   };
 
   const handleQuickPrompt = (prompt) => {
@@ -469,7 +522,7 @@ function VoiceAssistantModal() {
         </button>
       )}
 
-      {/* Assistant Modal Panel */}
+      {/* Assistant Modal Panel (Popup) */}
       {isOpen && (
         <div className="fixed bottom-6 right-6 w-96 sm:w-[480px] max-h-[85vh] bg-zinc-950/95 backdrop-blur-md rounded-2xl shadow-2xl border border-zinc-800 flex flex-col z-50 overflow-hidden transition-all duration-300">
           {/* Header */}
@@ -479,8 +532,16 @@ function VoiceAssistantModal() {
                 <FaRobot className="text-red-500 text-xl" />
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">GameStop AI Voice Assistant</h3>
-                <p className="text-xs text-gray-400">Say "Hey GameStop" • Natural Voice AI</p>
+                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                  GameStop AI Voice Assistant
+                  {isWakeWordActive && (
+                    <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                      Wake Word Active
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-gray-400">Say "Hey GameStop" • Natural Voice & Command Tracker</p>
               </div>
             </div>
             <button
@@ -493,6 +554,27 @@ function VoiceAssistantModal() {
 
           {/* Body Content */}
           <div className="p-5 flex-1 overflow-y-auto space-y-4">
+            {/* REAL-TIME COMMAND & ACTION EXECUTION MONITOR */}
+            {actionLogs.length > 0 && (
+              <div className="bg-zinc-900/90 border border-red-500/30 rounded-xl p-3.5 space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
+                  <span className="text-red-400 font-bold flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    <FaTerminal className="text-xs" />
+                    Live Command & Action Monitor
+                  </span>
+                  <span className="text-[10px] text-gray-500">Real-Time Log Stream</span>
+                </div>
+                <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                  {actionLogs.map((log, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-gray-300">
+                      <span className="text-gray-500 text-[10px] select-none">[{log.time}]</span>
+                      <span className="leading-snug">{log.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Status Visualizer */}
             {isListening && (
               <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-3.5 flex items-center justify-between animate-pulse">
@@ -501,7 +583,7 @@ function VoiceAssistantModal() {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                   </span>
-                  <span className="text-sm font-medium text-red-300">Listening... Speak now</span>
+                  <span className="text-sm font-medium text-red-300">Listening... Speak command now</span>
                 </div>
                 <button
                   onClick={toggleListening}
