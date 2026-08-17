@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar } from "react-icons/fa";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar, FaExclamationTriangle } from "react-icons/fa";
 import { processVoiceQuery, getVoiceSuggestions } from "../../services/voiceService";
 import { useCart } from "../../context/CartContext";
 
 function VoiceAssistantModal() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [isOpen, setIsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -16,8 +17,9 @@ function VoiceAssistantModal() {
   const [aiResponse, setAiResponse] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+  const [pendingConfirmation, setPendingConfirmation] = useState(null);
 
-  const { addToCart } = useCart();
+  const { addToCart, removeFromCart, clearCart } = useCart();
   const recognitionRef = useRef(null);
 
   // Helper function to stop text-to-speech
@@ -53,6 +55,14 @@ function VoiceAssistantModal() {
 
   const shouldRenderAI = isLoggedIn && !isExcludedRoute;
 
+  // Extract current Product ID context if viewing a product details page
+  let currentProductId = null;
+  if (currentPath && currentPath.startsWith("/product/")) {
+    const idStr = currentPath.split("/product/")[1];
+    const parsed = parseInt(idStr, 10);
+    if (!isNaN(parsed)) currentProductId = parsed;
+  }
+
   // Cleanup & stop all AI activity if user logs out or navigates to excluded route
   useEffect(() => {
     if (!shouldRenderAI) {
@@ -66,6 +76,7 @@ function VoiceAssistantModal() {
       stopSpeech();
       setQueryText("");
       setAiResponse(null);
+      setPendingConfirmation(null);
     }
   }, [shouldRenderAI, currentPath]);
 
@@ -172,21 +183,60 @@ function VoiceAssistantModal() {
     setIsThinking(true);
     setErrorMsg("");
     setLastQuery(textToSend);
+    setPendingConfirmation(null);
 
     try {
-      const response = await processVoiceQuery(textToSend);
+      const response = await processVoiceQuery(textToSend, {
+        currentPage: currentPath,
+        currentProductId: currentProductId,
+      });
+
       setAiResponse(response);
       setIsThinking(false);
 
-      // Trigger Text-to-Speech audio response
-      if (response && response.textResponse) {
-        speakText(response.textResponse);
+      // Execute Whitelisted Ecommerce Actions locally using existing GameStop Cart & Route logic
+      if (response) {
+        if (response.action === "ADD_TO_CART" && response.resolvedProduct) {
+          const qty = response.quantity || 1;
+          for (let i = 0; i < qty; i++) {
+            addToCart(response.resolvedProduct);
+          }
+        } else if (response.action === "REMOVE_FROM_CART" && response.resolvedProduct) {
+          removeFromCart(response.resolvedProduct.productId);
+        } else if (response.action === "EMPTY_CART" && response.requiresConfirmation) {
+          setPendingConfirmation("EMPTY_CART");
+        }
+
+        // Handle navigation if requested (e.g. /checkout, /orders, /cart)
+        if (response.targetRoute && response.action !== "EMPTY_CART") {
+          setTimeout(() => {
+            navigate(response.targetRoute);
+          }, 800);
+        }
+
+        // Trigger Text-to-Speech audio response
+        if (response.textResponse) {
+          speakText(response.textResponse);
+        }
       }
     } catch (err) {
       console.error("Voice Query Processing Error:", err);
       setIsThinking(false);
       setErrorMsg("Failed to connect to GameStop AI backend. Please check your server connection.");
     }
+  };
+
+  const handleConfirmAction = () => {
+    if (pendingConfirmation === "EMPTY_CART") {
+      clearCart();
+      setPendingConfirmation(null);
+      speakText("Your cart is now completely empty.");
+    }
+  };
+
+  const handleCancelAction = () => {
+    setPendingConfirmation(null);
+    speakText("Action cancelled.");
   };
 
   const handleQuickPrompt = (prompt) => {
@@ -225,7 +275,7 @@ function VoiceAssistantModal() {
               </div>
               <div>
                 <h3 className="font-bold text-white text-base">GameStop AI Voice Assistant</h3>
-                <p className="text-xs text-gray-400">Natural Voice & Product Recommendation</p>
+                <p className="text-xs text-gray-400">Natural Voice & Controlled Ecommerce Shopping</p>
               </div>
             </div>
             <button
@@ -260,7 +310,7 @@ function VoiceAssistantModal() {
             {isThinking && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 flex items-center gap-3">
                 <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm text-gray-300">Searching GameStop MySQL catalog...</span>
+                <span className="text-sm text-gray-300">Processing request against MySQL catalog...</span>
               </div>
             )}
 
@@ -293,7 +343,7 @@ function VoiceAssistantModal() {
                   value={queryText}
                   onChange={(e) => setQueryText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSendQuery()}
-                  placeholder='Try: "Find me a gaming mouse under 2000"'
+                  placeholder='Try: "Add 2 of these to my cart"'
                   className="w-full bg-transparent text-sm text-white focus:outline-none placeholder-gray-500"
                 />
                 <button
@@ -322,12 +372,39 @@ function VoiceAssistantModal() {
               </div>
             )}
 
+            {/* Confirmation Banner for Destructive Actions (e.g. Empty Cart) */}
+            {pendingConfirmation && (
+              <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                  <FaExclamationTriangle className="text-base" />
+                  <span>Confirmation Required</span>
+                </div>
+                <p className="text-xs text-gray-300">
+                  {aiResponse?.textResponse || "Are you sure you want to proceed with this action?"}
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleConfirmAction}
+                    className="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition"
+                  >
+                    Yes, Empty Cart
+                  </button>
+                  <button
+                    onClick={handleCancelAction}
+                    className="bg-zinc-800 hover:bg-zinc-700 text-gray-300 text-xs px-4 py-2 rounded-lg transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* AI Natural Language Response */}
-            {aiResponse && (
+            {aiResponse && !pendingConfirmation && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
                   <span className="text-xs font-bold text-red-500 tracking-wide uppercase">
-                    AI Recommendation
+                    AI Response ({aiResponse.action || aiResponse.intent})
                   </span>
                   {isSpeaking ? (
                     <button

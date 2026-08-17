@@ -11,12 +11,16 @@ const getAuthHeaders = () => {
   return headers;
 };
 
-export const processVoiceQuery = async (queryText) => {
+export const processVoiceQuery = async (queryText, context = {}) => {
   try {
     const response = await fetch(`${API_BASE_URL}/voice/assistant`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ query: queryText }),
+      body: JSON.stringify({
+        query: queryText,
+        currentPage: context.currentPage || "",
+        currentProductId: context.currentProductId || null,
+      }),
     });
 
     if (!response.ok) {

@@ -12,6 +12,13 @@ public class VoiceAssistantResponseDto {
     private List<String> extractedKeywords;
     private List<ProductDto> products;
 
+    // Ecommerce Controlled Action fields
+    private String action;
+    private ProductDto resolvedProduct;
+    private Integer quantity;
+    private String targetRoute;
+    private Boolean requiresConfirmation;
+
     public VoiceAssistantResponseDto() {
     }
 
@@ -29,6 +36,9 @@ public class VoiceAssistantResponseDto {
         this.extractedMaxPrice = extractedMaxPrice;
         this.extractedKeywords = extractedKeywords;
         this.products = products;
+        this.action = "NONE";
+        this.quantity = 1;
+        this.requiresConfirmation = false;
     }
 
     public String getIntent() {
@@ -77,5 +87,45 @@ public class VoiceAssistantResponseDto {
 
     public void setProducts(List<ProductDto> products) {
         this.products = products;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public void setAction(String action) {
+        this.action = action;
+    }
+
+    public ProductDto getResolvedProduct() {
+        return resolvedProduct;
+    }
+
+    public void setResolvedProduct(ProductDto resolvedProduct) {
+        this.resolvedProduct = resolvedProduct;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public String getTargetRoute() {
+        return targetRoute;
+    }
+
+    public void setTargetRoute(String targetRoute) {
+        this.targetRoute = targetRoute;
+    }
+
+    public Boolean getRequiresConfirmation() {
+        return requiresConfirmation;
+    }
+
+    public void setRequiresConfirmation(Boolean requiresConfirmation) {
+        this.requiresConfirmation = requiresConfirmation;
     }
 }
