@@ -174,6 +174,11 @@ function VoiceAssistantModal() {
     const textToSend = promptToUse || queryText;
     if (!textToSend || !textToSend.trim()) return;
 
+    // Clear input box after message is sent
+    if (!promptToUse) {
+      setQueryText("");
+    }
+
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
       setIsListening(false);
@@ -342,7 +347,14 @@ function VoiceAssistantModal() {
                   type="text"
                   value={queryText}
                   onChange={(e) => setQueryText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendQuery()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (queryText.trim() && !isThinking) {
+                        handleSendQuery();
+                      }
+                    }
+                  }}
                   placeholder='Try: "Add 2 of these to my cart"'
                   className="w-full bg-transparent text-sm text-white focus:outline-none placeholder-gray-500"
                 />
