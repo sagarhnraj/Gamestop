@@ -20,14 +20,36 @@ function VoiceAssistantModal() {
   const { addToCart } = useCart();
   const recognitionRef = useRef(null);
 
+  // Helper function to stop text-to-speech
+  function stopSpeech() {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  }
+
+  // Helper function to play text-to-speech
+  function speakText(text) {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    stopSpeech();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  }
+
   // 1. Determine if user is authenticated (using existing GameStop auth source of truth)
-  const token = localStorage.getItem("token");
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const isLoggedIn = Boolean(token && token !== "null" && token !== "undefined");
 
   // 2. Check if current route is a public auth page or admin page
+  const currentPath = location ? location.pathname : "";
   const isExcludedRoute =
-    ["/login", "/register", "/forgot-password", "/reset-password"].includes(location.pathname) ||
-    location.pathname.startsWith("/admin");
+    ["/login", "/register", "/forgot-password", "/reset-password"].includes(currentPath) ||
+    currentPath.startsWith("/admin");
 
   const shouldRenderAI = isLoggedIn && !isExcludedRoute;
 
@@ -45,7 +67,7 @@ function VoiceAssistantModal() {
       setQueryText("");
       setAiResponse(null);
     }
-  }, [shouldRenderAI, location.pathname]);
+  }, [shouldRenderAI, currentPath]);
 
   // Fetch verified dynamic suggestions from MySQL database when modal opens
   useEffect(() => {
@@ -64,7 +86,7 @@ function VoiceAssistantModal() {
     if (!shouldRenderAI) return;
 
     // Initialize Browser SpeechRecognition if supported
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
@@ -165,28 +187,6 @@ function VoiceAssistantModal() {
       setIsThinking(false);
       setErrorMsg("Failed to connect to GameStop AI backend. Please check your server connection.");
     }
-  };
-
-  const speakText = (text) => {
-    if (!("speechSynthesis" in window)) return;
-
-    stopSpeech();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const stopSpeech = () => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
   };
 
   const handleQuickPrompt = (prompt) => {
