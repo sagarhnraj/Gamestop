@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar, FaExclamationTriangle, FaTerminal } from "react-icons/fa";
+import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar, FaExclamationTriangle } from "react-icons/fa";
 import { processVoiceQuery, getVoiceSuggestions } from "../../services/voiceService";
 import { updateQuantity } from "../../services/cartService";
 import { useCart } from "../../context/CartContext";
@@ -10,8 +10,7 @@ function VoiceAssistantModal() {
   const navigate = useNavigate();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
+  const [assistantState, setAssistantState] = useState("READY"); // "READY" | "LISTENING" | "PROCESSING"
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [queryText, setQueryText] = useState("");
   const [lastQuery, setLastQuery] = useState("");
@@ -19,25 +18,17 @@ function VoiceAssistantModal() {
   const [errorMsg, setErrorMsg] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [pendingConfirmation, setPendingConfirmation] = useState(null);
-  const [actionLogs, setActionLogs] = useState([]);
-  const [wakeStatus, setWakeStatus] = useState("Wake listener: STARTING...");
-  const [lastSpokenTranscript, setLastSpokenTranscript] = useState("");
 
   const { addToCart, removeFromCart, clearCart, loadCart } = useCart();
-  const recognitionRef = useRef(null);
-  const wakeWordRecognitionRef = useRef(null);
-  const latestVoiceTranscriptRef = useRef("");
+
+  // Mode Controller Ref: "WAKE_LISTENING" | "COMMAND_LISTENING" | "PROCESSING" | "IDLE"
+  const modeRef = useRef("IDLE");
+  const activeRecognitionRef = useRef(null);
+  const commandTimerRef = useRef(null);
+  const latestTranscriptRef = useRef("");
   const handleSendQueryRef = useRef(null);
   const lastAiProductRef = useRef(null);
   const recentSearchResultsRef = useRef([]);
-  const isProcessingRef = useRef(false);
-  const wakeTriggeredRef = useRef(false);
-
-  // Helper to append a live action status log entry
-  function addActionLog(msg) {
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    setActionLogs((prev) => [...prev.slice(-6), { time: timeStr, msg }]);
-  }
 
   // Helper function to stop text-to-speech
   function stopSpeech() {
@@ -80,23 +71,209 @@ function VoiceAssistantModal() {
     if (!isNaN(parsed)) currentProductId = parsed;
   }
 
-  // Cleanup & stop all AI activity if user logs out or navigates to excluded route
-  useEffect(() => {
-    if (!shouldRenderAI) {
-      if (isOpen) setIsOpen(false);
-      if (wakeWordRecognitionRef.current) {
-        try {
-          wakeWordRecognitionRef.current.stop();
-        } catch (e) {}
-      }
-      stopSpeech();
-      setQueryText("");
-      setAiResponse(null);
-      setPendingConfirmation(null);
-      setActionLogs([]);
-      latestVoiceTranscriptRef.current = "";
+  // Safely stop any currently active recognition instance & clear 5s command timer
+  function stopActiveRecognition() {
+    if (commandTimerRef.current) {
+      clearTimeout(commandTimerRef.current);
+      commandTimerRef.current = null;
     }
-  }, [shouldRenderAI, currentPath]);
+    if (activeRecognitionRef.current) {
+      try {
+        activeRecognitionRef.current.stop();
+      } catch (e) {}
+      activeRecognitionRef.current = null;
+    }
+  }
+
+  // Background Wake-Word Recognition Controller ("Hey GameStop")
+  function startWakeListening() {
+    if (!shouldRenderAI) return;
+
+    const SpeechRecognition =
+      typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    if (!SpeechRecognition) return;
+
+    stopActiveRecognition();
+    modeRef.current = "WAKE_LISTENING";
+    setAssistantState("READY");
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        console.log("[WAKE] recognition started");
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+
+        if (!transcript || !transcript.trim()) return;
+        const lower = transcript.toLowerCase().trim();
+        console.log("[WAKE] recognition result:", lower);
+
+        const isWake =
+          lower.includes("hey gamestop") ||
+          lower.includes("hey game stop") ||
+          lower.includes("hi gamestop") ||
+          lower.includes("hello gamestop") ||
+          lower.includes("ok gamestop");
+
+        if (isWake && modeRef.current === "WAKE_LISTENING") {
+          console.log("[WAKE] wake word detected");
+
+          // Stop background wake listener
+          stopActiveRecognition();
+
+          // POPUP OPENS AUTOMATICALLY
+          setIsOpen(true);
+          stopSpeech();
+
+          // Extract any follow-up command spoken in the same sentence
+          const cleanCommand = lower
+            .replace(/hey\s*game\s*stop/g, "")
+            .replace(/hi\s*game\s*stop/g, "")
+            .replace(/hello\s*game\s*stop/g, "")
+            .replace(/ok\s*game\s*stop/g, "")
+            .replace(/gamestop/g, "")
+            .trim();
+
+          if (cleanCommand.length > 2) {
+            // WAKE WORD + COMMAND IN ONE SENTENCE
+            if (handleSendQueryRef.current) {
+              handleSendQueryRef.current(cleanCommand);
+            }
+          } else {
+            // WAKE WORD ONLY -> START 5-SECOND AUTOMATIC COMMAND LISTENING WINDOW
+            startCommandListening(true);
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.warn("[WAKE] recognition error:", event.error);
+      };
+
+      recognition.onend = () => {
+        console.log("[WAKE] recognition ended");
+        if (modeRef.current === "WAKE_LISTENING" && shouldRenderAI) {
+          console.log("[WAKE] restarting recognition");
+          setTimeout(() => {
+            if (modeRef.current === "WAKE_LISTENING" && shouldRenderAI) {
+              startWakeListening();
+            }
+          }, 300);
+        }
+      };
+
+      recognition.start();
+      activeRecognitionRef.current = recognition;
+    } catch (e) {
+      console.warn("[WAKE] init error:", e);
+    }
+  }
+
+  // Active Command Listening Controller (Manual or Automatic 5s Window)
+  function startCommandListening(isAutoFromWake = false) {
+    const SpeechRecognition =
+      typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+
+    if (!SpeechRecognition) {
+      setErrorMsg("Voice input is not supported in this browser. You can type your request below.");
+      return;
+    }
+
+    stopActiveRecognition();
+    modeRef.current = "COMMAND_LISTENING";
+    setAssistantState("LISTENING");
+    setErrorMsg("");
+    setQueryText("");
+    latestTranscriptRef.current = "";
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        console.log("[COMMAND] listening started (auto = " + isAutoFromWake + ")");
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setQueryText(transcript);
+        latestTranscriptRef.current = transcript.trim();
+      };
+
+      recognition.onerror = (event) => {
+        console.warn("[COMMAND] recognition error:", event.error);
+        if (event.error === "not-allowed") {
+          setErrorMsg("Microphone permission required for voice commands.");
+        }
+      };
+
+      recognition.onend = () => {
+        console.log("[COMMAND] listening ended");
+        if (commandTimerRef.current) {
+          clearTimeout(commandTimerRef.current);
+          commandTimerRef.current = null;
+        }
+
+        const captured = latestTranscriptRef.current;
+        if (captured && captured.trim().length > 0) {
+          latestTranscriptRef.current = "";
+          if (handleSendQueryRef.current) {
+            handleSendQueryRef.current(captured);
+          }
+        } else {
+          // If no speech was captured, return to READY / WAKE_LISTENING (popup stays open!)
+          startWakeListening();
+        }
+      };
+
+      recognition.start();
+      activeRecognitionRef.current = recognition;
+
+      // REQUIREMENT 2: 5-Second Command Window for automatic wake-word activation ONLY
+      if (isAutoFromWake) {
+        commandTimerRef.current = setTimeout(() => {
+          console.log("[COMMAND] 5-second wake-word window expired");
+          if (modeRef.current === "COMMAND_LISTENING") {
+            stopActiveRecognition();
+            startWakeListening(); // Return to READY state, popup STAYS OPEN!
+          }
+        }, 5000);
+      }
+    } catch (e) {
+      console.warn("[COMMAND] start error:", e);
+      startWakeListening();
+    }
+  }
+
+  // Initialize background wake word listener when component mounts or auth route changes
+  useEffect(() => {
+    if (shouldRenderAI) {
+      startWakeListening();
+    } else {
+      stopActiveRecognition();
+      modeRef.current = "IDLE";
+    }
+
+    return () => {
+      stopActiveRecognition();
+      modeRef.current = "IDLE";
+    };
+  }, [shouldRenderAI]);
 
   // Fetch verified dynamic suggestions from MySQL database when modal opens
   useEffect(() => {
@@ -111,217 +288,26 @@ function VoiceAssistantModal() {
     }
   }, [shouldRenderAI, isOpen]);
 
-  // Unified Background SpeechRecognition Controller for "Hey GameStop" Wake Word
+  // Stop Speech Synthesis when modal closes
   useEffect(() => {
-    if (!shouldRenderAI) return;
-
-    const SpeechRecognition =
-      typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-
-    if (!SpeechRecognition) {
-      setWakeStatus("Speech recognition not supported in browser.");
-      return;
+    if (!isOpen) {
+      stopSpeech();
     }
+  }, [isOpen]);
 
-    let isComponentMounted = true;
+  // CRITICAL REQUIREMENT: Do NOT render anything if user is NOT logged in or on public auth/admin pages
+  if (!shouldRenderAI) {
+    return null;
+  }
 
-    function initWakeListener() {
-      if (!isComponentMounted || !shouldRenderAI) return;
-
-      try {
-        if (wakeWordRecognitionRef.current) {
-          try {
-            wakeWordRecognitionRef.current.stop();
-          } catch (e) {}
-        }
-
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = "en-US";
-
-        recognition.onstart = () => {
-          console.log("[WAKE] recognition started");
-          setWakeStatus("Wake listener: RUNNING");
-          setErrorMsg("");
-        };
-
-        recognition.onresult = (event) => {
-          let transcript = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            transcript += event.results[i][0].transcript;
-          }
-
-          if (!transcript || !transcript.trim()) return;
-
-          const lower = transcript.toLowerCase().trim();
-          console.log("[WAKE] recognition result:", lower);
-          setLastSpokenTranscript(`Speech detected: "${transcript.trim()}"`);
-
-          const isWake =
-            lower.includes("hey gamestop") ||
-            lower.includes("hey game stop") ||
-            lower.includes("hi gamestop") ||
-            lower.includes("hello gamestop") ||
-            lower.includes("ok gamestop");
-
-          if (isWake && !wakeTriggeredRef.current && !isProcessingRef.current) {
-            wakeTriggeredRef.current = true;
-            console.log("[WAKE] wake word detected");
-
-            // Open Modal Popup immediately!
-            setIsOpen(true);
-            stopSpeech();
-
-            const cleanCommand = lower
-              .replace(/hey\s*game\s*stop/g, "")
-              .replace(/hi\s*game\s*stop/g, "")
-              .replace(/hello\s*game\s*stop/g, "")
-              .replace(/ok\s*game\s*stop/g, "")
-              .replace(/gamestop/g, "")
-              .trim();
-
-            const initialTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            if (cleanCommand.length > 2) {
-              setActionLogs([
-                { time: initialTime, msg: `WAKE WORD DETECTED: "Hey GameStop"` },
-                { time: initialTime, msg: `COMMAND CAPTURED: "${cleanCommand}"` }
-              ]);
-
-              if (handleSendQueryRef.current) {
-                handleSendQueryRef.current(cleanCommand);
-              }
-            } else {
-              setActionLogs([
-                { time: initialTime, msg: `WAKE WORD DETECTED: "Hey GameStop"` },
-                { time: initialTime, msg: `LISTENING FOR COMMAND...` }
-              ]);
-
-              speakText("GameStop AI active! What command can I perform for you?");
-              setTimeout(() => {
-                wakeTriggeredRef.current = false;
-                startCommandListening();
-              }, 1000);
-            }
-          }
-        };
-
-        recognition.onerror = (event) => {
-          console.warn("Speech recognition error:", event.error);
-          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-            setWakeStatus("Microphone permission required for Hey GameStop.");
-          }
-        };
-
-        recognition.onend = () => {
-          console.log("[WAKE] recognition ended");
-          if (isComponentMounted && shouldRenderAI && !isProcessingRef.current) {
-            console.log("[WAKE] restarting recognition");
-            setTimeout(() => {
-              if (isComponentMounted && shouldRenderAI) {
-                initWakeListener();
-              }
-            }, 300);
-          }
-        };
-
-        try {
-          recognition.start();
-        } catch (e) {
-          console.warn("[WAKE] start failed:", e);
-        }
-
-        wakeWordRecognitionRef.current = recognition;
-      } catch (e) {
-        console.warn("[WAKE] init error:", e);
-      }
-    }
-
-    initWakeListener();
-
-    return () => {
-      isComponentMounted = false;
-      if (wakeWordRecognitionRef.current) {
-        try {
-          wakeWordRecognitionRef.current.stop();
-        } catch (e) {}
-      }
-    };
-  }, [shouldRenderAI]);
-
-  // Start active command microphone inside modal
-  const startCommandListening = () => {
-    const SpeechRecognition = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!SpeechRecognition) return;
-
-    try {
-      if (wakeWordRecognitionRef.current) {
-        try {
-          wakeWordRecognitionRef.current.stop();
-        } catch (e) {}
-      }
-
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-
-      recognition.onstart = () => {
-        setIsListening(true);
-        setWakeStatus("Listening for command...");
-        setErrorMsg("");
-        latestVoiceTranscriptRef.current = "";
-      };
-
-      recognition.onresult = (event) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        setQueryText(transcript);
-        latestVoiceTranscriptRef.current = transcript.trim();
-        setLastSpokenTranscript(`Speech detected: "${transcript.trim()}"`);
-      };
-
-      recognition.onerror = (event) => {
-        setIsListening(false);
-        if (event.error === "not-allowed") {
-          setErrorMsg("Microphone permission denied. Please allow microphone access or type your query.");
-        }
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        const voiceText = latestVoiceTranscriptRef.current;
-        if (voiceText && voiceText.trim().length > 0) {
-          latestVoiceTranscriptRef.current = "";
-          if (handleSendQueryRef.current) {
-            handleSendQueryRef.current(voiceText);
-          }
-        } else {
-          setWakeStatus("Wake listener: RUNNING");
-        }
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch (e) {
-      console.warn("Start command listening error:", e);
-    }
-  };
-
+  // Manual Microphone Button Click Handler (OPTION A - No 5s timeout limit)
   const toggleListening = () => {
-    if (isListening) {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {}
-      }
-      setIsListening(false);
-      setWakeStatus("Wake listener: RUNNING");
+    if (assistantState === "LISTENING") {
+      stopActiveRecognition();
+      startWakeListening();
     } else {
-      startCommandListening();
+      stopSpeech();
+      startCommandListening(false); // Manual click does NOT have 5s limit
     }
   };
 
@@ -329,10 +315,13 @@ function VoiceAssistantModal() {
     let rawText = promptToUse || queryText;
     if (!rawText || !rawText.trim()) return;
 
+    // Pop up Assistant Modal Panel immediately
     setIsOpen(true);
-    isProcessingRef.current = true;
-    setWakeStatus("Processing request...");
+    stopActiveRecognition();
+    modeRef.current = "PROCESSING";
+    setAssistantState("PROCESSING");
 
+    // Clean wake-word prefixes if user spoke "Hey GameStop ..."
     const textToSend = rawText
       .replace(/^hey\s*game\s*stop\s*/i, "")
       .replace(/^hi\s*game\s*stop\s*/i, "")
@@ -341,23 +330,13 @@ function VoiceAssistantModal() {
       .trim();
 
     if (!textToSend) {
-      isProcessingRef.current = false;
-      wakeTriggeredRef.current = false;
+      startWakeListening();
       return;
     }
 
     setQueryText("");
-    latestVoiceTranscriptRef.current = "";
-
-    if (isListening && recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-      setIsListening(false);
-    }
-
+    latestTranscriptRef.current = "";
     stopSpeech();
-    setIsThinking(true);
     setErrorMsg("");
     setLastQuery(textToSend);
     setPendingConfirmation(null);
@@ -382,9 +361,6 @@ function VoiceAssistantModal() {
       ? lastAiProductRef.current.productId || lastAiProductRef.current.id
       : null;
 
-    // Real Action Monitor Progress Logging (Requirement 8)
-    addActionLog("SEARCHING GAMESTOP CATALOG...");
-
     try {
       const response = await processVoiceQuery(textToSend, {
         currentPage: currentPath,
@@ -392,8 +368,7 @@ function VoiceAssistantModal() {
         lastSearchResultProductId: lastSearchId,
       });
 
-      setIsThinking(false);
-
+      // Persist the MOST RECENT completed AI search results
       if (response && response.products && response.products.length > 0) {
         recentSearchResultsRef.current = response.products;
         lastAiProductRef.current = response.products[0];
@@ -421,16 +396,12 @@ function VoiceAssistantModal() {
             const qty = response.quantity || 1;
             const pId = targetProd.productId || targetProd.id;
 
-            addActionLog(`PRODUCT IDENTIFIED: ${targetProd.name} (productId: ${pId})`);
-            addActionLog("EXECUTING CART ACTION...");
-
             try {
               await addToCart(targetProd);
               if (qty > 1 && pId) {
                 await updateQuantity(pId, qty);
               }
               await loadCart();
-              addActionLog("CART UPDATED SUCCESSFULLY");
 
               const confirmText =
                 qty > 1
@@ -448,22 +419,18 @@ function VoiceAssistantModal() {
               response.textResponse = errText;
               setAiResponse(response);
               setErrorMsg(errText);
-              addActionLog(`ACTION FAILED: ${err.message || 'Cart request failed'}`);
             }
           } else if (isActionTop) {
             const errText = "No recent AI search results found. Please search for products first.";
             response.textResponse = errText;
             setAiResponse(response);
             setErrorMsg(errText);
-            addActionLog("ACTION FAILED: No recent search results");
           }
         } else if (response.action === "REMOVE_FROM_CART" && response.resolvedProduct) {
           const pId = response.resolvedProduct.productId || response.resolvedProduct.id;
           if (pId) {
-            addActionLog(`EXECUTING CART ACTION: Remove item ${pId}`);
             await removeFromCart(pId);
             await loadCart();
-            addActionLog("CART UPDATED SUCCESSFULLY");
           }
         } else if (response.action === "EMPTY_CART" && response.requiresConfirmation) {
           setPendingConfirmation("EMPTY_CART");
@@ -483,13 +450,9 @@ function VoiceAssistantModal() {
       }
     } catch (err) {
       console.error("Voice Query Processing Error:", err);
-      setIsThinking(false);
       setErrorMsg("Failed to connect to GameStop AI backend. Please check your server connection.");
-      addActionLog(`ACTION FAILED: ${err.message || 'API Connection Failed'}`);
     } finally {
-      isProcessingRef.current = false;
-      wakeTriggeredRef.current = false;
-      setWakeStatus("Wake listener: RUNNING");
+      startWakeListening();
     }
   };
 
@@ -497,12 +460,10 @@ function VoiceAssistantModal() {
 
   const handleConfirmAction = async () => {
     if (pendingConfirmation === "EMPTY_CART") {
-      addActionLog("EXECUTING CART ACTION: Clear Cart");
       await clearCart();
       await loadCart();
       setPendingConfirmation(null);
       speakText("Your cart is now completely empty.");
-      addActionLog("CART UPDATED SUCCESSFULLY");
     }
   };
 
@@ -547,10 +508,26 @@ function VoiceAssistantModal() {
               </div>
               <div>
                 <h3 className="font-bold text-white text-base">GameStop AI Voice Assistant</h3>
-                {/* Visible Real Recognition State Bar (Requirement 11) */}
-                <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400 mt-0.5">
-                  <span className={`w-2 h-2 rounded-full ${wakeStatus.includes("RUNNING") ? "bg-green-500 animate-pulse" : "bg-red-500"}`}></span>
-                  <span>{wakeStatus}</span>
+                {/* REQUIREMENT 9: Simple Clean Real-Time Status Indicator */}
+                <div className="flex items-center gap-2 mt-0.5">
+                  {assistantState === "LISTENING" && (
+                    <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                      Listening...
+                    </span>
+                  )}
+                  {assistantState === "PROCESSING" && (
+                    <span className="text-[10px] bg-zinc-800 text-gray-300 border border-zinc-700 font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-spin"></span>
+                      Processing...
+                    </span>
+                  )}
+                  {assistantState === "READY" && (
+                    <span className="text-[10px] bg-green-500/20 text-green-400 border border-green-500/30 font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+                      Ready
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -564,36 +541,15 @@ function VoiceAssistantModal() {
 
           {/* Body Content */}
           <div className="p-5 flex-1 overflow-y-auto space-y-4">
-            {/* REAL-TIME COMMAND & ACTION EXECUTION MONITOR */}
-            {actionLogs.length > 0 && (
-              <div className="bg-zinc-900/90 border border-red-500/30 rounded-xl p-3.5 space-y-2 text-xs font-mono">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
-                  <span className="text-red-400 font-bold flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
-                    <FaTerminal className="text-xs" />
-                    Live Command & Action Monitor
-                  </span>
-                  <span className="text-[10px] text-gray-500">Real Execution Stream</span>
-                </div>
-                <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                  {actionLogs.map((log, idx) => (
-                    <div key={idx} className="flex items-start gap-2 text-gray-300">
-                      <span className="text-gray-500 text-[10px] select-none">[{log.time}]</span>
-                      <span className="leading-snug">{log.msg}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Status Visualizer */}
-            {isListening && (
+            {/* Status Visualizer Banner */}
+            {assistantState === "LISTENING" && (
               <div className="bg-red-950/40 border border-red-500/40 rounded-xl p-3.5 flex items-center justify-between animate-pulse">
                 <div className="flex items-center gap-3">
                   <span className="relative flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
                   </span>
-                  <span className="text-sm font-medium text-red-300">Listening... Speak command now</span>
+                  <span className="text-sm font-medium text-red-300">Listening... Speak now</span>
                 </div>
                 <button
                   onClick={toggleListening}
@@ -604,7 +560,7 @@ function VoiceAssistantModal() {
               </div>
             )}
 
-            {isThinking && (
+            {assistantState === "PROCESSING" && (
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 flex items-center gap-3">
                 <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="text-sm text-gray-300">Processing request against MySQL catalog...</span>
@@ -627,11 +583,11 @@ function VoiceAssistantModal() {
                 <button
                   onClick={toggleListening}
                   className={`p-2.5 rounded-lg transition ${
-                    isListening
+                    assistantState === "LISTENING"
                       ? "bg-red-600 text-white animate-bounce"
                       : "bg-zinc-800 text-gray-300 hover:text-white hover:bg-zinc-700"
                   }`}
-                  title={isListening ? "Stop Listening" : "Start Voice Input"}
+                  title={assistantState === "LISTENING" ? "Stop Listening" : "Start Voice Input"}
                 >
                   <FaMicrophone />
                 </button>
@@ -642,7 +598,7 @@ function VoiceAssistantModal() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      if (queryText.trim() && !isThinking) {
+                      if (queryText.trim() && assistantState !== "PROCESSING") {
                         handleSendQuery();
                       }
                     }
@@ -652,7 +608,7 @@ function VoiceAssistantModal() {
                 />
                 <button
                   onClick={() => handleSendQuery()}
-                  disabled={!queryText.trim() || isThinking}
+                  disabled={!queryText.trim() || assistantState === "PROCESSING"}
                   className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white p-2.5 rounded-lg transition"
                 >
                   <FaPaperPlane className="text-xs" />
