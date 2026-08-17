@@ -119,14 +119,23 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
         switch (intent) {
             case "ADD_CURRENT_PRODUCT":
             case "ADD_TO_CART": {
-                boolean isCurrentProduct = intent.equals("ADD_CURRENT_PRODUCT") ||
-                        lowerQuery.contains("this") || lowerQuery.contains("current") || lowerQuery.contains("buy this");
+                boolean isCurrentOrIt = intent.equals("ADD_CURRENT_PRODUCT") ||
+                        lowerQuery.contains("this") || lowerQuery.contains("it") ||
+                        lowerQuery.contains("these") || lowerQuery.contains("current") || lowerQuery.contains("buy this");
 
                 Product targetProduct = null;
-                if (isCurrentProduct && requestDto.getCurrentProductId() != null) {
+
+                // 1. If currently viewing a product details page, use currentProductId
+                if (requestDto.getCurrentProductId() != null) {
                     targetProduct = productRepository.findById(requestDto.getCurrentProductId()).orElse(null);
                 }
 
+                // 2. If user just searched for a product and refers to "it" / "this" / "these", use lastSearchResultProductId
+                if (targetProduct == null && requestDto.getLastSearchResultProductId() != null && isCurrentOrIt) {
+                    targetProduct = productRepository.findById(requestDto.getLastSearchResultProductId()).orElse(null);
+                }
+
+                // 3. Otherwise, search by keywords in MySQL database
                 if (targetProduct == null && primaryKeyword != null) {
                     List<Product> matches = productRepository.searchVoiceProducts(primaryKeyword, category, maxPrice);
                     if (matches.isEmpty()) {
@@ -137,8 +146,9 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
                     }
                 }
 
-                if (targetProduct == null && requestDto.getCurrentProductId() != null) {
-                    targetProduct = productRepository.findById(requestDto.getCurrentProductId()).orElse(null);
+                // 4. Fallback to lastSearchResultProductId if still not found
+                if (targetProduct == null && requestDto.getLastSearchResultProductId() != null) {
+                    targetProduct = productRepository.findById(requestDto.getLastSearchResultProductId()).orElse(null);
                 }
 
                 if (targetProduct != null) {
@@ -148,10 +158,11 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
                         response.setAction("ADD_TO_CART");
                         response.setResolvedProduct(mapToDto(targetProduct));
                         response.setQuantity(quantity);
-                        response.setTextResponse("Done! Added " + quantity + " x " + targetProduct.getName() + " to your cart.");
+                        String qtyStr = quantity > 1 ? (quantity + " × ") : "";
+                        response.setTextResponse("Done! " + qtyStr + targetProduct.getName() + " has been added to your cart.");
                     }
-                } else if (isCurrentProduct && requestDto.getCurrentProductId() == null) {
-                    response.setTextResponse("I don't have a product selected right now. Please open a product page or specify which product you'd like to add.");
+                } else if (isCurrentOrIt && requestDto.getCurrentProductId() == null && requestDto.getLastSearchResultProductId() == null) {
+                    response.setTextResponse("I don't have a product selected right now. Please open a product or tell me which product you'd like.");
                 } else {
                     response.setTextResponse("Sorry, I couldn't find that product in the GameStop catalog to add to your cart.");
                 }

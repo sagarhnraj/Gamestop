@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { FaMicrophone, FaStop, FaVolumeUp, FaVolumeMute, FaPaperPlane, FaTimes, FaRobot, FaShoppingCart, FaStar, FaExclamationTriangle } from "react-icons/fa";
 import { processVoiceQuery, getVoiceSuggestions } from "../../services/voiceService";
+import { updateQuantity } from "../../services/cartService";
 import { useCart } from "../../context/CartContext";
 
 function VoiceAssistantModal() {
@@ -19,10 +20,11 @@ function VoiceAssistantModal() {
   const [suggestions, setSuggestions] = useState([]);
   const [pendingConfirmation, setPendingConfirmation] = useState(null);
 
-  const { addToCart, removeFromCart, clearCart } = useCart();
+  const { addToCart, removeFromCart, clearCart, loadCart } = useCart();
   const recognitionRef = useRef(null);
   const latestVoiceTranscriptRef = useRef("");
   const handleSendQueryRef = useRef(null);
+  const lastAiProductRef = useRef(null);
 
   // Helper function to stop text-to-speech
   function stopSpeech() {
@@ -205,27 +207,64 @@ function VoiceAssistantModal() {
     setLastQuery(textToSend);
     setPendingConfirmation(null);
 
+    const lastSearchId = lastAiProductRef.current
+      ? lastAiProductRef.current.productId || lastAiProductRef.current.id
+      : null;
+
     try {
       const response = await processVoiceQuery(textToSend, {
         currentPage: currentPath,
         currentProductId: currentProductId,
+        lastSearchResultProductId: lastSearchId,
       });
 
-      setAiResponse(response);
       setIsThinking(false);
+
+      if (response && response.products && response.products.length > 0) {
+        lastAiProductRef.current = response.products[0];
+      }
 
       // Execute Whitelisted Ecommerce Actions locally using existing GameStop Cart & Route logic
       if (response) {
         if (response.action === "ADD_TO_CART" && response.resolvedProduct) {
+          const targetProd = response.resolvedProduct;
           const qty = response.quantity || 1;
-          for (let i = 0; i < qty; i++) {
-            addToCart(response.resolvedProduct);
+          const pId = targetProd.productId || targetProd.id;
+
+          try {
+            await addToCart(targetProd);
+            if (qty > 1 && pId) {
+              await updateQuantity(pId, qty);
+            }
+            await loadCart();
+
+            const confirmText =
+              qty > 1
+                ? `${qty} × ${targetProd.name} have been added to your cart.`
+                : `${targetProd.name} has been added to your cart.`;
+
+            response.textResponse = confirmText;
+            setAiResponse(response);
+            speakText(confirmText);
+          } catch (err) {
+            console.error("Cart action error:", err);
+            const errText = `Failed to add ${targetProd.name} to cart. Please verify your login session.`;
+            response.textResponse = errText;
+            setAiResponse(response);
+            setErrorMsg(errText);
           }
+          return;
         } else if (response.action === "REMOVE_FROM_CART" && response.resolvedProduct) {
-          removeFromCart(response.resolvedProduct.productId);
+          const pId = response.resolvedProduct.productId || response.resolvedProduct.id;
+          if (pId) {
+            await removeFromCart(pId);
+            await loadCart();
+          }
         } else if (response.action === "EMPTY_CART" && response.requiresConfirmation) {
           setPendingConfirmation("EMPTY_CART");
         }
+
+        setAiResponse(response);
 
         // Handle navigation if requested (e.g. /checkout, /orders, /cart)
         if (response.targetRoute && response.action !== "EMPTY_CART") {
@@ -249,9 +288,10 @@ function VoiceAssistantModal() {
   // Assign latest handleSendQuery function to ref to prevent stale closures in speech recognition callback
   handleSendQueryRef.current = handleSendQuery;
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
     if (pendingConfirmation === "EMPTY_CART") {
-      clearCart();
+      await clearCart();
+      await loadCart();
       setPendingConfirmation(null);
       speakText("Your cart is now completely empty.");
     }
@@ -466,10 +506,10 @@ function VoiceAssistantModal() {
                     <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto pr-1">
                       {aiResponse.products.map((item) => (
                         <div
-                          key={item.productId}
+                          key={item.productId || item.id}
                           className="bg-zinc-950 p-3 rounded-xl border border-zinc-800 flex gap-3 items-center hover:border-zinc-700 transition"
                         >
-                          <Link to={`/product/${item.productId}`}>
+                          <Link to={`/product/${item.productId || item.id}`}>
                             <img
                               src={item.image || "https://via.placeholder.com/150"}
                               alt={item.name}
@@ -478,7 +518,7 @@ function VoiceAssistantModal() {
                           </Link>
 
                           <div className="flex-1 min-w-0">
-                            <Link to={`/product/${item.productId}`}>
+                            <Link to={`/product/${item.productId || item.id}`}>
                               <h4 className="font-bold text-sm text-white hover:text-red-400 transition truncate">
                                 {item.name}
                               </h4>
@@ -492,7 +532,7 @@ function VoiceAssistantModal() {
                               </span>
                             </div>
                             <span className="text-[10px] text-gray-400 block truncate">
-                              {item.category ? item.category.name : "GameStop Catalog"}
+                              {item.category ? (item.category.name || item.category.categoryName || item.category) : "GameStop Catalog"}
                             </span>
                           </div>
 

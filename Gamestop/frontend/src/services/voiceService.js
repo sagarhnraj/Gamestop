@@ -20,6 +20,7 @@ export const processVoiceQuery = async (queryText, context = {}) => {
         query: queryText,
         currentPage: context.currentPage || "",
         currentProductId: context.currentProductId || null,
+        lastSearchResultProductId: context.lastSearchResultProductId || null,
       }),
     });
 

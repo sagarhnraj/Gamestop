@@ -5,6 +5,7 @@ public class VoiceAssistantRequestDto {
     private String query;
     private String currentPage;
     private Integer currentProductId;
+    private Integer lastSearchResultProductId;
 
     public VoiceAssistantRequestDto() {
     }
@@ -41,5 +42,13 @@ public class VoiceAssistantRequestDto {
 
     public void setCurrentProductId(Integer currentProductId) {
         this.currentProductId = currentProductId;
+    }
+
+    public Integer getLastSearchResultProductId() {
+        return lastSearchResultProductId;
+    }
+
+    public void setLastSearchResultProductId(Integer lastSearchResultProductId) {
+        this.lastSearchResultProductId = lastSearchResultProductId;
     }
 }
