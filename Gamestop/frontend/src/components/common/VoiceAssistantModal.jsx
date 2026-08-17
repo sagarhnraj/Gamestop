@@ -25,6 +25,7 @@ function VoiceAssistantModal() {
   const latestVoiceTranscriptRef = useRef("");
   const handleSendQueryRef = useRef(null);
   const lastAiProductRef = useRef(null);
+  const recentSearchResultsRef = useRef([]);
 
   // Helper function to stop text-to-speech
   function stopSpeech() {
@@ -207,7 +208,23 @@ function VoiceAssistantModal() {
     setLastQuery(textToSend);
     setPendingConfirmation(null);
 
-    const lastSearchId = lastAiProductRef.current
+    const lowerQuery = textToSend.toLowerCase();
+    const isTopReq =
+      lowerQuery.includes("top product") ||
+      lowerQuery.includes("first product") ||
+      lowerQuery.includes("first one") ||
+      lowerQuery.includes("top result") ||
+      lowerQuery.includes("first result") ||
+      lowerQuery.includes("first item");
+
+    const topProductFromRecentSearch =
+      isTopReq && recentSearchResultsRef.current && recentSearchResultsRef.current.length > 0
+        ? recentSearchResultsRef.current[0]
+        : null;
+
+    const lastSearchId = topProductFromRecentSearch
+      ? topProductFromRecentSearch.productId || topProductFromRecentSearch.id
+      : lastAiProductRef.current
       ? lastAiProductRef.current.productId || lastAiProductRef.current.id
       : null;
 
@@ -220,40 +237,67 @@ function VoiceAssistantModal() {
 
       setIsThinking(false);
 
+      // Persist the MOST RECENT completed AI search results
       if (response && response.products && response.products.length > 0) {
+        recentSearchResultsRef.current = response.products;
         lastAiProductRef.current = response.products[0];
       }
 
       // Execute Whitelisted Ecommerce Actions locally using existing GameStop Cart & Route logic
       if (response) {
-        if (response.action === "ADD_TO_CART" && response.resolvedProduct) {
-          const targetProd = response.resolvedProduct;
-          const qty = response.quantity || 1;
-          const pId = targetProd.productId || targetProd.id;
+        const isActionTop = response.action === "ADD_TOP_PRODUCT" || isTopReq;
 
-          try {
-            await addToCart(targetProd);
-            if (qty > 1 && pId) {
-              await updateQuantity(pId, qty);
+        if ((isActionTop || response.action === "ADD_TO_CART") && (response.resolvedProduct || topProductFromRecentSearch || recentSearchResultsRef.current.length > 0)) {
+          let targetProd = null;
+
+          if (isActionTop) {
+            if (recentSearchResultsRef.current && recentSearchResultsRef.current.length > 0) {
+              targetProd = recentSearchResultsRef.current[0];
+            } else if (response.resolvedProduct) {
+              targetProd = response.resolvedProduct;
+            } else if (lastAiProductRef.current) {
+              targetProd = lastAiProductRef.current;
             }
-            await loadCart();
+          } else {
+            targetProd = response.resolvedProduct || (recentSearchResultsRef.current.length > 0 ? recentSearchResultsRef.current[0] : null);
+          }
 
-            const confirmText =
-              qty > 1
-                ? `${qty} × ${targetProd.name} have been added to your cart.`
-                : `${targetProd.name} has been added to your cart.`;
+          if (targetProd) {
+            const qty = response.quantity || 1;
+            const pId = targetProd.productId || targetProd.id;
 
-            response.textResponse = confirmText;
-            setAiResponse(response);
-            speakText(confirmText);
-          } catch (err) {
-            console.error("Cart action error:", err);
-            const errText = `Failed to add ${targetProd.name} to cart. Please verify your login session.`;
+            try {
+              await addToCart(targetProd);
+              if (qty > 1 && pId) {
+                await updateQuantity(pId, qty);
+              }
+              await loadCart();
+
+              const confirmText =
+                qty > 1
+                  ? `${qty} × ${targetProd.name} have been added to your cart.`
+                  : `${targetProd.name} has been added to your cart.`;
+
+              response.textResponse = confirmText;
+              response.action = isActionTop ? "ADD_TOP_PRODUCT" : "ADD_TO_CART";
+              response.resolvedProduct = targetProd;
+              setAiResponse(response);
+              speakText(confirmText);
+            } catch (err) {
+              console.error("Cart action error:", err);
+              const errText = `Failed to add ${targetProd.name} to cart. Please verify your login session.`;
+              response.textResponse = errText;
+              setAiResponse(response);
+              setErrorMsg(errText);
+            }
+            return;
+          } else if (isActionTop) {
+            const errText = "No recent AI search results found. Please search for products first.";
             response.textResponse = errText;
             setAiResponse(response);
             setErrorMsg(errText);
+            return;
           }
-          return;
         } else if (response.action === "REMOVE_FROM_CART" && response.resolvedProduct) {
           const pId = response.resolvedProduct.productId || response.resolvedProduct.id;
           if (pId) {
@@ -413,7 +457,7 @@ function VoiceAssistantModal() {
                       }
                     }
                   }}
-                  placeholder='Try: "Add 2 of these to my cart"'
+                  placeholder='Try: "Add 2 of the top product to my cart"'
                   className="w-full bg-transparent text-sm text-white focus:outline-none placeholder-gray-500"
                 />
                 <button

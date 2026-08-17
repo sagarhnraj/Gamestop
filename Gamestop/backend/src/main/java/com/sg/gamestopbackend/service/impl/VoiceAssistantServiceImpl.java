@@ -117,26 +117,37 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
 
         // 5. Execute Whitelisted Controlled Ecommerce Action
         switch (intent) {
+            case "ADD_TOP_PRODUCT":
             case "ADD_CURRENT_PRODUCT":
             case "ADD_TO_CART": {
+                boolean isTopProduct = intent.equals("ADD_TOP_PRODUCT") ||
+                        lowerQuery.contains("top product") || lowerQuery.contains("first product") ||
+                        lowerQuery.contains("first one") || lowerQuery.contains("top result") ||
+                        lowerQuery.contains("first result") || lowerQuery.contains("first item");
+
                 boolean isCurrentOrIt = intent.equals("ADD_CURRENT_PRODUCT") ||
                         lowerQuery.contains("this") || lowerQuery.contains("it") ||
                         lowerQuery.contains("these") || lowerQuery.contains("current") || lowerQuery.contains("buy this");
 
                 Product targetProduct = null;
 
-                // 1. If currently viewing a product details page, use currentProductId
-                if (requestDto.getCurrentProductId() != null) {
+                // 1. If "top product", prioritize lastSearchResultProductId
+                if (isTopProduct && requestDto.getLastSearchResultProductId() != null) {
+                    targetProduct = productRepository.findById(requestDto.getLastSearchResultProductId()).orElse(null);
+                }
+
+                // 2. If currently viewing a product details page, use currentProductId
+                if (targetProduct == null && requestDto.getCurrentProductId() != null && !isTopProduct) {
                     targetProduct = productRepository.findById(requestDto.getCurrentProductId()).orElse(null);
                 }
 
-                // 2. If user just searched for a product and refers to "it" / "this" / "these", use lastSearchResultProductId
+                // 3. If user refers to "it" / "this" / "these", use lastSearchResultProductId
                 if (targetProduct == null && requestDto.getLastSearchResultProductId() != null && isCurrentOrIt) {
                     targetProduct = productRepository.findById(requestDto.getLastSearchResultProductId()).orElse(null);
                 }
 
-                // 3. Otherwise, search by keywords in MySQL database
-                if (targetProduct == null && primaryKeyword != null) {
+                // 4. Otherwise, search by keywords in MySQL database (unless top product requested)
+                if (targetProduct == null && primaryKeyword != null && !isTopProduct) {
                     List<Product> matches = productRepository.searchVoiceProducts(primaryKeyword, category, maxPrice);
                     if (matches.isEmpty()) {
                         matches = productRepository.searchVoiceProducts(primaryKeyword, null, null);
@@ -146,7 +157,7 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
                     }
                 }
 
-                // 4. Fallback to lastSearchResultProductId if still not found
+                // 5. Fallback to lastSearchResultProductId
                 if (targetProduct == null && requestDto.getLastSearchResultProductId() != null) {
                     targetProduct = productRepository.findById(requestDto.getLastSearchResultProductId()).orElse(null);
                 }
@@ -155,12 +166,16 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
                     if (targetProduct.getStock() != null && targetProduct.getStock() < quantity) {
                         response.setTextResponse("Sorry, only " + targetProduct.getStock() + " unit(s) of " + targetProduct.getName() + " remain in stock.");
                     } else {
-                        response.setAction("ADD_TO_CART");
+                        response.setAction(isTopProduct ? "ADD_TOP_PRODUCT" : "ADD_TO_CART");
                         response.setResolvedProduct(mapToDto(targetProduct));
                         response.setQuantity(quantity);
                         String qtyStr = quantity > 1 ? (quantity + " × ") : "";
                         response.setTextResponse("Done! " + qtyStr + targetProduct.getName() + " has been added to your cart.");
                     }
+                } else if (isTopProduct) {
+                    response.setAction("ADD_TOP_PRODUCT");
+                    response.setQuantity(quantity);
+                    response.setTextResponse("ADD_TOP_PRODUCT");
                 } else if (isCurrentOrIt && requestDto.getCurrentProductId() == null && requestDto.getLastSearchResultProductId() == null) {
                     response.setTextResponse("I don't have a product selected right now. Please open a product or tell me which product you'd like.");
                 } else {
@@ -305,6 +320,9 @@ public class VoiceAssistantServiceImpl implements VoiceAssistantService {
     }
 
     private String determineStrictIntent(String lowerQuery, String hfIntent) {
+        if (lowerQuery.contains("top product") || lowerQuery.contains("first product") || lowerQuery.contains("first one") || lowerQuery.contains("top result") || lowerQuery.contains("first result") || lowerQuery.contains("first item")) {
+            return "ADD_TOP_PRODUCT";
+        }
         if (lowerQuery.contains("add this") || lowerQuery.contains("add current") || lowerQuery.contains("buy this") || lowerQuery.contains("add this product")) {
             return "ADD_CURRENT_PRODUCT";
         }
