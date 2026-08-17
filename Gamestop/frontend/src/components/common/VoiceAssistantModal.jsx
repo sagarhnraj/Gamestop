@@ -21,6 +21,8 @@ function VoiceAssistantModal() {
 
   const { addToCart, removeFromCart, clearCart } = useCart();
   const recognitionRef = useRef(null);
+  const latestVoiceTranscriptRef = useRef("");
+  const handleSendQueryRef = useRef(null);
 
   // Helper function to stop text-to-speech
   function stopSpeech() {
@@ -77,6 +79,7 @@ function VoiceAssistantModal() {
       setQueryText("");
       setAiResponse(null);
       setPendingConfirmation(null);
+      latestVoiceTranscriptRef.current = "";
     }
   }, [shouldRenderAI, currentPath]);
 
@@ -107,6 +110,7 @@ function VoiceAssistantModal() {
       recognition.onstart = () => {
         setIsListening(true);
         setErrorMsg("");
+        latestVoiceTranscriptRef.current = "";
       };
 
       recognition.onresult = (event) => {
@@ -115,11 +119,13 @@ function VoiceAssistantModal() {
           transcript += event.results[i][0].transcript;
         }
         setQueryText(transcript);
+        latestVoiceTranscriptRef.current = transcript.trim();
       };
 
       recognition.onerror = (event) => {
         console.warn("Speech recognition error:", event.error);
         setIsListening(false);
+        latestVoiceTranscriptRef.current = "";
         if (event.error === "not-allowed") {
           setErrorMsg("Microphone permission denied. Please allow microphone access or type your query.");
         } else if (event.error === "no-speech") {
@@ -131,6 +137,13 @@ function VoiceAssistantModal() {
 
       recognition.onend = () => {
         setIsListening(false);
+        const voiceText = latestVoiceTranscriptRef.current;
+        if (voiceText && voiceText.trim().length > 0) {
+          latestVoiceTranscriptRef.current = "";
+          if (handleSendQueryRef.current) {
+            handleSendQueryRef.current(voiceText);
+          }
+        }
       };
 
       recognitionRef.current = recognition;
@@ -162,6 +175,7 @@ function VoiceAssistantModal() {
       stopSpeech();
       setErrorMsg("");
       setQueryText("");
+      latestVoiceTranscriptRef.current = "";
       try {
         recognitionRef.current.start();
       } catch (err) {
@@ -174,13 +188,14 @@ function VoiceAssistantModal() {
     const textToSend = promptToUse || queryText;
     if (!textToSend || !textToSend.trim()) return;
 
-    // Clear input box after message is sent
-    if (!promptToUse) {
-      setQueryText("");
-    }
+    // Clear input box and voice ref after message is sent
+    setQueryText("");
+    latestVoiceTranscriptRef.current = "";
 
     if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
       setIsListening(false);
     }
 
@@ -230,6 +245,9 @@ function VoiceAssistantModal() {
       setErrorMsg("Failed to connect to GameStop AI backend. Please check your server connection.");
     }
   };
+
+  // Assign latest handleSendQuery function to ref to prevent stale closures in speech recognition callback
+  handleSendQueryRef.current = handleSendQuery;
 
   const handleConfirmAction = () => {
     if (pendingConfirmation === "EMPTY_CART") {
