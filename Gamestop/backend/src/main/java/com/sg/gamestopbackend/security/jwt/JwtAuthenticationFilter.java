@@ -44,31 +44,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String jwt = authHeader.substring(7);
-        String email = jwtService.extractUsername(jwt);
+        try {
+            String jwt = authHeader.substring(7);
+            if (jwt != null && !jwt.trim().isEmpty() && !"null".equalsIgnoreCase(jwt) && !"undefined".equalsIgnoreCase(jwt)) {
+                String email = jwtService.extractUsername(jwt);
 
-        if (email != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
+                if (email != null &&
+                        SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            UserDetails userDetails =
-                    customUserDetailsService.loadUserByUsername(email);
+                    UserDetails userDetails =
+                            customUserDetailsService.loadUserByUsername(email);
 
-            if (jwtService.isTokenValid(jwt, userDetails.getUsername())) {
+                    if (jwtService.isTokenValid(jwt, userDetails.getUsername())) {
 
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities());
+                        UsernamePasswordAuthenticationToken authToken =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails,
+                                        null,
+                                        userDetails.getAuthorities());
 
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request));
+                        authToken.setDetails(
+                                new WebAuthenticationDetailsSource()
+                                        .buildDetails(request));
 
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authToken);
+                        SecurityContextHolder
+                                .getContext()
+                                .setAuthentication(authToken);
+                    }
+                }
             }
+        } catch (Exception e) {
+            // Safely ignore expired or malformed JWT tokens on public endpoints
+            System.err.println("JwtAuthenticationFilter: Ignored invalid/expired JWT token: " + e.getMessage());
         }
 
         filterChain.doFilter(request, response);

@@ -18,7 +18,9 @@ export async function getAllProducts(retries = 3, delayMs = 1500) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await fetch(`${API_BASE_URL}/products`, {
-        headers: getAuthHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
       if (response.ok) {
@@ -28,7 +30,7 @@ export async function getAllProducts(retries = 3, delayMs = 1500) {
         }
       }
     } catch (err) {
-      console.warn(`[getAllProducts] Fetch attempt ${attempt} failed:`, err);
+      console.warn(`[getAllProducts] Attempt ${attempt} failed:`, err);
     }
     if (attempt < retries) {
       await new Promise((res) => setTimeout(res, delayMs));
@@ -37,7 +39,9 @@ export async function getAllProducts(retries = 3, delayMs = 1500) {
 
   // Final fetch attempt
   const finalResponse = await fetch(`${API_BASE_URL}/products`, {
-    headers: getAuthHeaders(),
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
 
   if (!finalResponse.ok) {
@@ -51,14 +55,16 @@ export async function getProductById(id, retries = 2, delayMs = 1000) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await fetch(`${API_BASE_URL}/products/${id}`, {
-        headers: getAuthHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
       if (response.ok) {
         return await response.json();
       }
     } catch (err) {
-      console.warn(`[getProductById] Fetch attempt ${attempt} failed:`, err);
+      console.warn(`[getProductById] Attempt ${attempt} failed:`, err);
     }
     if (attempt < retries) {
       await new Promise((res) => setTimeout(res, delayMs));
@@ -66,7 +72,9 @@ export async function getProductById(id, retries = 2, delayMs = 1000) {
   }
 
   const finalResponse = await fetch(`${API_BASE_URL}/products/${id}`, {
-    headers: getAuthHeaders(),
+    headers: {
+      "Content-Type": "application/json",
+    },
   });
 
   if (!finalResponse.ok) {
