@@ -7,35 +7,73 @@ function getAuthHeaders() {
     "Content-Type": "application/json",
   };
 
-  if (token) {
+  if (token && token !== "null" && token !== "undefined") {
     headers.Authorization = `Bearer ${token}`;
   }
 
   return headers;
 }
 
-export async function getAllProducts() {
-  const response = await fetch(`${API_BASE_URL}/products`, {
+export async function getAllProducts(retries = 3, delayMs = 1500) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/products`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data;
+        }
+      }
+    } catch (err) {
+      console.warn(`[getAllProducts] Fetch attempt ${attempt} failed:`, err);
+    }
+    if (attempt < retries) {
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
+  }
+
+  // Final fetch attempt
+  const finalResponse = await fetch(`${API_BASE_URL}/products`, {
     headers: getAuthHeaders(),
   });
 
-  if (!response.ok) {
+  if (!finalResponse.ok) {
     throw new Error("Failed to fetch products");
   }
 
-  return await response.json();
+  return await finalResponse.json();
 }
 
-export async function getProductById(id) {
-  const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+export async function getProductById(id, retries = 2, delayMs = 1000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/products/${id}`, {
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.warn(`[getProductById] Fetch attempt ${attempt} failed:`, err);
+    }
+    if (attempt < retries) {
+      await new Promise((res) => setTimeout(res, delayMs));
+    }
+  }
+
+  const finalResponse = await fetch(`${API_BASE_URL}/products/${id}`, {
     headers: getAuthHeaders(),
   });
 
-  if (!response.ok) {
+  if (!finalResponse.ok) {
     throw new Error("Failed to fetch product");
   }
 
-  return await response.json();
+  return await finalResponse.json();
 }
 
 export async function createProduct(productData) {

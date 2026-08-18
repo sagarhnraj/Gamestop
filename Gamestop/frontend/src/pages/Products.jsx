@@ -25,19 +25,22 @@ function Products() {
     }
   }, [categoryFromUrl]);
 
-  useEffect(() => {
-    async function fetchProducts() {
-      try {
-        const data = await getAllProducts();
+  async function fetchProductsData() {
+    setLoading(true);
+    try {
+      const data = await getAllProducts(3, 1000);
+      if (Array.isArray(data)) {
         setProducts(data);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
       }
+    } catch (error) {
+      console.error("Error loading products:", error);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    fetchProducts();
+  useEffect(() => {
+    fetchProductsData();
   }, []);
 
   // Filter logic
@@ -66,7 +69,7 @@ function Products() {
       return (Number(b.rating) || 0) - (Number(a.rating) || 0);
     }
     // Default: Newest
-    return (b.productId || 0) - (a.productId || 0);
+    return (b.productId || b.id || 0) - (a.productId || a.id || 0);
   });
 
   const handleResetFilters = () => {
@@ -85,9 +88,16 @@ function Products() {
         </h1>
 
         {loading ? (
-          <h2 className="text-center text-2xl">
-            Loading Products...
-          </h2>
+          <div className="grid lg:grid-cols-4 gap-8">
+            <div className="hidden lg:block bg-zinc-900/40 rounded-2xl h-96 animate-pulse border border-zinc-800"></div>
+            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3, 4, 5, 6].map((n) => (
+                <div key={n} className="bg-zinc-900 rounded-2xl h-80 animate-pulse border border-zinc-800 flex items-center justify-center">
+                  <span className="text-zinc-600 text-sm">Loading Catalog...</span>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <div className="grid lg:grid-cols-4 gap-8">
             <FilterSidebar
@@ -99,7 +109,20 @@ function Products() {
               setSortBy={setSortBy}
               onReset={handleResetFilters}
             />
-            <ProductGrid products={sortedProducts} />
+
+            {products.length > 0 ? (
+              <ProductGrid products={sortedProducts} />
+            ) : (
+              <div className="lg:col-span-3 text-center py-16 bg-zinc-900/50 rounded-2xl border border-zinc-800 space-y-4">
+                <p className="text-gray-400 text-lg">Connecting to GameStop MySQL catalog...</p>
+                <button
+                  onClick={fetchProductsData}
+                  className="bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl transition"
+                >
+                  Reload Products Catalog 🔄
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
