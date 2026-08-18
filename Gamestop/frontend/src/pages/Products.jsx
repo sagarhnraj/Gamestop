@@ -6,6 +6,20 @@ import FilterSidebar from "../components/products/FilterSidebar";
 import ProductGrid from "../components/products/ProductGrid";
 import { getAllProducts } from "../services/productService";
 
+const categoryMap = {
+  consoles: 1,
+  console: 1,
+  "gaming consoles": 1,
+  games: 2,
+  game: 2,
+  accessories: 3,
+  accessory: 3,
+  "gaming accessories": 3,
+  setup: 4,
+  setups: 4,
+  "gaming setup": 4,
+};
+
 function Products() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +35,15 @@ function Products() {
   // Sync category from URL parameter on load/change
   useEffect(() => {
     if (categoryFromUrl) {
-      setSelectedCategories([Number(categoryFromUrl)]);
+      const lower = String(categoryFromUrl).trim().toLowerCase();
+      let catId = categoryMap[lower] || Number(categoryFromUrl);
+      if (!isNaN(catId) && catId > 0) {
+        setSelectedCategories([catId]);
+      } else {
+        setSelectedCategories([]);
+      }
+    } else {
+      setSelectedCategories([]);
     }
   }, [categoryFromUrl]);
 
@@ -46,13 +68,24 @@ function Products() {
   // Filter logic
   const filteredProducts = products.filter((product) => {
     // 1. Category Filter
-    const matchesCategory =
-      selectedCategories.length === 0 ||
-      (product.category && selectedCategories.includes(Number(product.category.categoryId)));
+    let matchesCategory = true;
+    if (selectedCategories.length > 0) {
+      const prodCatId = Number(product.category?.categoryId || product.category?.id || product.categoryId || 0);
+      const prodCatName = (product.category?.name || product.category?.categoryName || "").toLowerCase();
+
+      matchesCategory = selectedCategories.some((id) => {
+        if (id === prodCatId) return true;
+        if (id === 1 && prodCatName.includes("console")) return true;
+        if (id === 2 && prodCatName.includes("game") && !prodCatName.includes("accessory") && !prodCatName.includes("setup")) return true;
+        if (id === 3 && prodCatName.includes("accessor")) return true;
+        if (id === 4 && prodCatName.includes("setup")) return true;
+        return false;
+      });
+    }
 
     // 2. Price Filter
     const productPrice = Number(product.price || 0);
-    const matchesPrice = productPrice <= maxPrice;
+    const matchesPrice = maxPrice >= 100000 || productPrice <= maxPrice;
 
     return matchesCategory && matchesPrice;
   });
